@@ -260,12 +260,16 @@ static NSData *StoreWithUnknownLayout(void)
 
 static void TestUnknownLayoutGivesNamesOnly(NSString *path)
 {
+    [NSUserDefaults.standardUserDefaults removeObjectForKey:@"WQLaunchServicesWorkedOutLayout"];
     WriteData(StoreWithUnknownLayout(), path);
     [NSUserDefaults.standardUserDefaults setObject:path forKey:@"WQLaunchServicesStore"];
     WQCheck([wq_display_name(@"com.example.app7") isEqualToString:@"Example 7"]);
     WQCheck([wq_display_name(@"com.apple.mobilesafari") isEqualToString:@"Safari"]);
-    // No container identity from a worked-out layout.
-    WQCheck(wq_ls_container_paths(nil).count == 0);
+    // The containers are listed, but without an identity.
+    NSArray *listed = wq_ls_container_paths(nil);
+    WQCheck(listed.count == 30);
+    for (NSString *container in listed) WQCheck(wq_bundle_id_for_container(container) == nil);
+    [NSUserDefaults.standardUserDefaults removeObjectForKey:@"WQLaunchServicesWorkedOutLayout"];
 }
 #endif
 

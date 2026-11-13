@@ -5,6 +5,7 @@
 //
 
 #import "WQLaunchServices.h"
+#include <sys/sysctl.h>
 #import "WQLocalization.h"
 #import "WQAccess.h"
 #import <stdlib.h>
@@ -487,11 +488,13 @@ BOOL wq_ls_test_known_layouts_off;
 // container paths to be trusted at all. Names: the offset whose string equals
 // the built-in names of Apple's apps, in every candidate type.
 //
-// Only the names are used. The container -> bundle id map is not published:
-// a folder's identity decides where backups go and what a restore may
-// replace, and a worked-out layout matched one container wrongly in a
-// thousand in testing. Identity keeps coming from the container's own
-// identifier (or a known layout). `description` is for the Log.
+// Names and the list of container paths are used; the container -> bundle id
+// map is not: a folder's identity decides where backups go and what a
+// restore may replace, and a worked-out layout matched one container wrongly
+// in a thousand in testing. *containersOut maps every listed path to NSNull
+// (no identity); identities keep coming from the container's own identifier
+// (or a known layout). The worked-out offsets are remembered per iOS build.
+// `description` is for the Log.
 static BOOL wq_ls_auto_layout_compute(const uint8_t *b, size_t n, size_t heap, NSData *pathRefs,
                                       NSDictionary **containersOut, NSDictionary **displayOut, NSString **description);
 
@@ -530,52 +533,42 @@ static BOOL wq_ls_auto_layout(const uint8_t *b, size_t n, size_t heap, NSData *p
     return ok;
 }
 
-static BOOL wq_ls_auto_layout_compute(const uint8_t *b, size_t n, size_t heap, NSData *pathRefs,
-                                      NSDictionary **containersOut, NSDictionary **displayOut, NSString **description)
+// Records of the given types ((size << 16) | container offset) that point at
+// a container path, collected in one pass over the store, and the strings
+// those records refer to (general table and path table, as in the normal
+// parser; an id with two different paths is unusable).
+static NSArray<NSData *> *wq_ls_auto_collect(const uint8_t *b, size_t n, size_t heap, const uint32_t *refs, NSUInteger pathCount,
+                                            NSArray<NSNumber *> *keys, NSMutableDictionary<NSNumber *, NSString *> *strings,
+                                            NSMutableDictionary<NSNumber *, id> *paths)
 {
-    const uint32_t *refs = pathRefs.bytes;
-    NSUInteger pathCount = pathRefs.length / sizeof(uint32_t);
-    if (pathCount < 20) return NO;
-    BOOL cutOff = NO;
-    NSCountedSet<NSNumber *> *votes = wq_ls_layout_votes(b, n, refs, pathCount, NULL, &cutOff);
-    NSUInteger minVotes = MAX((NSUInteger)10, pathCount / 50);
-    NSArray<NSNumber *> *ranked = [[votes.allObjects filteredArrayUsingPredicate:[NSPredicate predicateWithBlock:
-        ^BOOL(NSNumber *key, NSDictionary *__unused bindings) { return [votes countForObject:key] >= minVotes; }]]
-        sortedArrayUsingComparator:^NSComparisonResult(NSNumber *x, NSNumber *y) {
-            NSUInteger cx = [votes countForObject:x], cy = [votes countForObject:y];
-            return cx > cy ? NSOrderedAscending : cx < cy ? NSOrderedDescending : [x compare:y];
-        }];
-    if (ranked.count > 10) ranked = [ranked subarrayWithRange:NSMakeRange(0, 10)];
-    if (!ranked.count) return NO;
-
-    // Records of each candidate type that point at a container path.
+    enum { kMaxTypes = 16 };
+    NSUInteger count = MIN(keys.count, (NSUInteger)kMaxTypes);
+    uint32_t sizes[kMaxTypes], coffs[kMaxTypes];
+    NSMutableArray<NSMutableData *> *records = [NSMutableArray new];
+    for (NSUInteger c = 0; c < count; c++) {
+        sizes[c] = (uint32_t)(keys[c].unsignedLongLongValue >> 16);
+        coffs[c] = (uint32_t)(keys[c].unsignedLongLongValue & 0xffff);
+        [records addObject:[NSMutableData new]];
+    }
     const uint32_t kIDs = kWQLSMaxStringID;
     uint8_t *need = calloc(kIDs / 8, 1);
-    if (!need) return NO;
-    NSMutableArray<NSData *> *candidateRecords = [NSMutableArray new];
-    NSUInteger totalRecords = 0;
-    for (NSNumber *key in ranked) {
-        uint32_t size = (uint32_t)(key.unsignedLongLongValue >> 16), coff = (uint32_t)(key.unsignedLongLongValue & 0xffff);
-        NSMutableData *offsets = [NSMutableData new];
-        for (size_t o = 0; o + 8 + size <= n && totalRecords < 200000; o += 4) {
-            if (wq_rd32(b + o + 4) != size) continue;
-            uint32_t ref = wq_rd32(b + o + 8 + coff);
+    if (!need) return @[];
+    NSUInteger total = 0;
+    for (size_t o = 0; o + 8 <= n && total < 200000; o += 4) {
+        uint32_t size = wq_rd32(b + o + 4);
+        for (NSUInteger c = 0; c < count; c++) {
+            if (size != sizes[c] || o + 8 + size > n || coffs[c] + 4 > size) continue;
+            uint32_t ref = wq_rd32(b + o + 8 + coffs[c]);
             if (!ref || (ref & 3) || !bsearch(&ref, refs, pathCount, sizeof(uint32_t), wq_u32_cmp)) continue;
             uint32_t at = (uint32_t)(o + 8);
-            [offsets appendBytes:&at length:sizeof(at)];
-            totalRecords++;
+            [records[c] appendBytes:&at length:sizeof(at)];
+            total++;
             for (uint32_t k = 0; k + 4 <= size; k += 4) {
                 uint32_t r = wq_rd32(b + o + 8 + k);
                 if (r && !(r & 3) && (r >> 2) < kIDs) need[(r >> 2) / 8] |= 1 << ((r >> 2) % 8);
             }
         }
-        [candidateRecords addObject:offsets];
     }
-
-    // The strings those records refer to (general table and path table, as
-    // in the normal parser; an id with two different paths is unusable).
-    NSMutableDictionary<NSNumber *, NSString *> *strings = [NSMutableDictionary new];
-    NSMutableDictionary<NSNumber *, id> *paths = [NSMutableDictionary new];
     for (size_t o = 0; o + 8 <= n && strings.count < kWQLSMaxDecodedStrings; o += 4) {
         uint32_t sid = wq_rd32(b + o);
         if (!sid || sid >= kIDs || !(need[sid / 8] & (1 << (sid % 8)))) continue;
@@ -596,6 +589,59 @@ static BOOL wq_ls_auto_layout_compute(const uint8_t *b, size_t n, size_t heap, N
         if (!strings[@(sid)] || o >= heap) strings[@(sid)] = str;
     }
     free(need);
+    return records;
+}
+
+static NSString *wq_ls_os_build(void)
+{
+    char build[64] = {0};
+    size_t len = sizeof(build);
+    return sysctlbyname("kern.osversion", build, &len, NULL, 0) == 0 ? @(build) : @"";
+}
+
+// The worked-out layout of this iOS build, so later launches skip the search.
+static NSString *const kWQLSAutoLayoutKey = @"WQLaunchServicesWorkedOutLayout";
+
+static BOOL wq_ls_auto_layout_compute(const uint8_t *b, size_t n, size_t heap, NSData *pathRefs,
+                                      NSDictionary **containersOut, NSDictionary **displayOut, NSString **description)
+{
+    const uint32_t *refs = pathRefs.bytes;
+    NSUInteger pathCount = pathRefs.length / sizeof(uint32_t);
+    if (pathCount < 20) return NO;
+    NSUInteger minVotes = MAX((NSUInteger)10, pathCount / 50);
+    NSString *osBuild = wq_ls_os_build();
+
+    // A layout worked out before on this iOS build: types with their offsets.
+    NSDictionary *remembered = [NSUserDefaults.standardUserDefaults dictionaryForKey:kWQLSAutoLayoutKey];
+    NSArray<NSDictionary *> *types = nil;
+    BOOL fromMemory = NO;
+    if ([remembered[@"build"] isEqual:osBuild] && [remembered[@"types"] isKindOfClass:NSArray.class]) {
+        types = remembered[@"types"];
+        fromMemory = types.count > 0;
+    }
+
+    NSMutableDictionary<NSNumber *, NSString *> *strings = [NSMutableDictionary new];
+    NSMutableDictionary<NSNumber *, id> *paths = [NSMutableDictionary new];
+    NSArray<NSData *> *candidateRecords = nil;
+    NSArray<NSNumber *> *ranked = nil;
+    if (fromMemory) {
+        NSMutableArray *keys = [NSMutableArray new];
+        for (NSDictionary *t in types) [keys addObject:@([t[@"size"] unsignedLongLongValue] << 16 | [t[@"container"] unsignedLongLongValue])];
+        ranked = keys;
+    } else {
+        BOOL cutOff = NO;
+        NSCountedSet<NSNumber *> *votes = wq_ls_layout_votes(b, n, refs, pathCount, NULL, &cutOff);
+        ranked = [[votes.allObjects filteredArrayUsingPredicate:[NSPredicate predicateWithBlock:
+            ^BOOL(NSNumber *key, NSDictionary *__unused bindings) { return [votes countForObject:key] >= minVotes; }]]
+            sortedArrayUsingComparator:^NSComparisonResult(NSNumber *x, NSNumber *y) {
+                NSUInteger cx = [votes countForObject:x], cy = [votes countForObject:y];
+                return cx > cy ? NSOrderedAscending : cx < cy ? NSOrderedDescending : [x compare:y];
+            }];
+        if (ranked.count > 10) ranked = [ranked subarrayWithRange:NSMakeRange(0, 10)];
+    }
+    if (!ranked.count) return NO;
+    candidateRecords = wq_ls_auto_collect(b, n, heap, refs, pathCount, ranked, strings, paths);
+    if (candidateRecords.count != ranked.count) return NO;
     NSString *(^pathFor)(uint32_t) = ^NSString *(uint32_t ref) {
         id path = paths[@(ref >> 2)];
         if (![path isKindOfClass:NSString.class]) return nil;
@@ -603,34 +649,47 @@ static BOOL wq_ls_auto_layout_compute(const uint8_t *b, size_t n, size_t heap, N
         if ([clean hasPrefix:@"/var/"]) clean = [@"/private" stringByAppendingString:clean];
         return wq_is_data_container_path(clean) ? clean : nil;
     };
+    // Container -> bundle id for one record type and bundle id offset.
+    NSMutableDictionary *(^mapFor)(NSUInteger, uint32_t, uint32_t) = ^NSMutableDictionary *(NSUInteger c, uint32_t coff, uint32_t boff) {
+        const uint32_t *at = candidateRecords[c].bytes;
+        NSUInteger count = candidateRecords[c].length / sizeof(uint32_t);
+        NSMutableDictionary<NSString *, id> *map = [NSMutableDictionary new];
+        for (NSUInteger i = 0; i < count; i++) {
+            uint32_t bref = wq_rd32(b + at[i] + boff), cref = wq_rd32(b + at[i] + coff);
+            if (!bref || (bref & 3)) continue;
+            NSString *bid = strings[@(bref >> 2)], *path = pathFor(cref);
+            if (!path || !wq_looks_like_bundle_id(bid)) continue;
+            id known = map[path];
+            if (!known) map[path] = bid;
+            else if (![known isEqual:bid]) map[path] = NSNull.null;
+        }
+        for (NSString *path in map.allKeys) if (map[path] == NSNull.null) [map removeObjectForKey:path];
+        return map;
+    };
 
-    // Best bundle id offset per candidate type, then the best two types together.
+    // Per type: the bundle id offset (searched, or remembered).
     NSMutableArray<NSDictionary *> *results = [NSMutableArray new];
     for (NSUInteger c = 0; c < ranked.count; c++) {
         uint32_t size = (uint32_t)(ranked[c].unsignedLongLongValue >> 16), coff = (uint32_t)(ranked[c].unsignedLongLongValue & 0xffff);
-        const uint32_t *at = candidateRecords[c].bytes;
-        NSUInteger count = candidateRecords[c].length / sizeof(uint32_t);
         NSDictionary *best = nil;
-        for (uint32_t boff = 0; boff + 4 <= size; boff += 4) {
-            if (boff == coff) continue;
-            NSMutableDictionary<NSString *, id> *map = [NSMutableDictionary new];
-            for (NSUInteger i = 0; i < count; i++) {
-                uint32_t bref = wq_rd32(b + at[i] + boff), cref = wq_rd32(b + at[i] + coff);
-                if (!bref || (bref & 3)) continue;
-                NSString *bid = strings[@(bref >> 2)], *path = pathFor(cref);
-                if (!path || !wq_looks_like_bundle_id(bid)) continue;
-                id known = map[path];
-                if (!known) map[path] = bid;
-                else if (![known isEqual:bid]) map[path] = NSNull.null;
+        if (fromMemory) {
+            uint32_t boff = [types[c][@"bundle"] unsignedIntValue];
+            if (boff + 4 > size) continue;
+            NSMutableDictionary *map = mapFor(c, coff, boff);
+            best = @{ @"map": map, @"distinct": @([NSSet setWithArray:map.allValues].count), @"size": @(size), @"container": @(coff),
+                      @"bundle": @(boff), @"index": @(c), @"name": types[c][@"name"] ?: @(-1), @"used": types[c][@"used"] ?: @NO };
+        } else {
+            for (uint32_t boff = 0; boff + 4 <= size; boff += 4) {
+                if (boff == coff) continue;
+                NSMutableDictionary *map = mapFor(c, coff, boff);
+                // A real bundle id field holds a different id for nearly every
+                // container; a type or class field ("public.mime-type") repeats.
+                // Scored by distinct ids, and a field that mostly repeats is out.
+                NSUInteger distinct = [NSSet setWithArray:map.allValues].count;
+                if (distinct * 10 < map.count * 9) continue;
+                if (distinct > [best[@"distinct"] unsignedIntegerValue])
+                    best = @{ @"map": map, @"distinct": @(distinct), @"size": @(size), @"container": @(coff), @"bundle": @(boff), @"index": @(c) };
             }
-            for (NSString *path in map.allKeys) if (map[path] == NSNull.null) [map removeObjectForKey:path];
-            // A real bundle id field holds a different id for nearly every
-            // container; a type or class field ("public.mime-type") repeats.
-            // Scored by distinct ids, and a field that mostly repeats is out.
-            NSUInteger distinct = [NSSet setWithArray:map.allValues].count;
-            if (distinct * 10 < map.count * 9) continue;
-            if (distinct > [best[@"distinct"] unsignedIntegerValue])
-                best = @{ @"map": map, @"distinct": @(distinct), @"size": @(size), @"container": @(coff), @"bundle": @(boff), @"index": @(c) };
         }
         if (best && [best[@"map"] count] >= minVotes) [results addObject:best];
     }
@@ -638,7 +697,13 @@ static BOOL wq_ls_auto_layout_compute(const uint8_t *b, size_t n, size_t heap, N
         NSUInteger cx = [x[@"map"] count], cy = [y[@"map"] count];
         return cx > cy ? NSOrderedAscending : cx < cy ? NSOrderedDescending : NSOrderedSame;
     }];
-    if (!results.count) return NO;
+    if (!results.count) {
+        if (fromMemory) [NSUserDefaults.standardUserDefaults removeObjectForKey:kWQLSAutoLayoutKey];
+        return NO;
+    }
+
+    // Plausibility: the best one or two types together must map at least
+    // half of the container paths without conflicts.
     NSMutableDictionary<NSString *, id> *containers = [results[0][@"map"] mutableCopy];
     NSMutableArray<NSDictionary *> *used = [NSMutableArray arrayWithObject:results[0]];
     for (NSUInteger r = 1; r < results.count && used.count < 2; r++) {
@@ -660,22 +725,28 @@ static BOOL wq_ls_auto_layout_compute(const uint8_t *b, size_t n, size_t heap, N
         [used addObject:other];
     }
     for (NSString *path in containers.allKeys) if (containers[path] == NSNull.null) [containers removeObjectForKey:path];
-    if (containers.count * 2 < pathCount) return NO;
+    if (containers.count * 2 < pathCount) {
+        if (fromMemory) [NSUserDefaults.standardUserDefaults removeObjectForKey:kWQLSAutoLayoutKey];
+        return NO;
+    }
 
-    // Names: an offset in the same records whose string is the known name of
-    // Apple's apps. Without at least three matches no names are taken.
+    // Names: per type, the offset whose string is the known name of Apple's
+    // apps (searched, or remembered). Fewer than three matches: no names.
     NSDictionary<NSString *, NSString *> *builtin = wq_builtin_names();
     NSMutableDictionary<NSString *, NSString *> *display = [NSMutableDictionary new];
     NSMutableArray<NSString *> *parts = [NSMutableArray new];
+    NSMutableArray<NSDictionary *> *rememberTypes = [NSMutableArray new];
     for (NSDictionary *result in results) {
         NSUInteger c = [result[@"index"] unsignedIntegerValue];
         uint32_t size = [result[@"size"] unsignedIntValue], boff = [result[@"bundle"] unsignedIntValue];
         const uint32_t *at = candidateRecords[c].bytes;
         NSUInteger count = candidateRecords[c].length / sizeof(uint32_t);
-        uint32_t bestName = UINT32_MAX;
+        int64_t bestName = -1;
         NSUInteger bestMatches = 0;
+        int64_t rememberedName = fromMemory ? [result[@"name"] longLongValue] : -1;
         for (uint32_t noff = 0; noff + 4 <= size; noff += 4) {
             if (noff == boff) continue;
+            if (fromMemory && (int64_t)noff != rememberedName) continue;
             NSUInteger matches = 0;
             for (NSUInteger i = 0; i < count; i++) {
                 uint32_t bref = wq_rd32(b + at[i] + boff), nref = wq_rd32(b + at[i] + noff);
@@ -685,23 +756,42 @@ static BOOL wq_ls_auto_layout_compute(const uint8_t *b, size_t n, size_t heap, N
             }
             if (matches > bestMatches) { bestMatches = matches; bestName = noff; }
         }
-        if (bestMatches >= 3) {
+        BOOL named = bestMatches >= 3;
+        if (named) {
             for (NSUInteger i = 0; i < count; i++) {
-                uint32_t bref = wq_rd32(b + at[i] + boff), nref = wq_rd32(b + at[i] + bestName);
+                uint32_t bref = wq_rd32(b + at[i] + boff), nref = wq_rd32(b + at[i] + (uint32_t)bestName);
                 if ((bref & 3) || (nref & 3) || !nref) continue;
                 NSString *bid = strings[@(bref >> 2)], *name = wq_safe_name(strings[@(nref >> 2)]);
                 if (wq_looks_like_bundle_id(bid) && name && !display[bid]) display[bid] = name;
             }
         }
-        if ([used containsObject:result] || bestMatches >= 3)
+        BOOL isUsed = [used containsObject:result];
+        if (isUsed || named) {
             [parts addObject:[NSString stringWithFormat:@"0x%x-byte records (container +0x%x, bundle id +0x%x, name %@): %lu",
                               size, [result[@"container"] unsignedIntValue], boff,
-                              bestMatches >= 3 ? [NSString stringWithFormat:@"+0x%x", bestName] : @"not found",
+                              named ? [NSString stringWithFormat:@"+0x%llx", bestName] : @"not found",
                               (unsigned long)[result[@"map"] count]]];
+            [rememberTypes addObject:@{ @"size": @(size), @"container": result[@"container"], @"bundle": @(boff),
+                                        @"name": @(named ? bestName : -1), @"used": @(isUsed) }];
+        }
     }
-    if (containersOut) *containersOut = [containers copy];
+    if (!fromMemory)
+        [NSUserDefaults.standardUserDefaults setObject:@{ @"build": osBuild, @"types": rememberTypes } forKey:kWQLSAutoLayoutKey];
+    // The container list: every data container path these records point at,
+    // with no app attached (NSNull). The paths themselves are just strings of
+    // the store (the scan checks that they exist); which app a folder belongs
+    // to keeps coming from the folder's own identifier.
+    NSMutableDictionary<NSString *, id> *listed = [NSMutableDictionary new];
+    for (id path in paths.allValues) {
+        if (![path isKindOfClass:NSString.class]) continue;
+        NSString *clean = [path hasSuffix:@"/"] ? [path substringToIndex:[path length] - 1] : path;
+        if ([clean hasPrefix:@"/var/"]) clean = [@"/private" stringByAppendingString:clean];
+        if (wq_is_data_container_path(clean)) listed[clean] = NSNull.null;
+    }
+    if (containersOut) *containersOut = [listed copy];
     if (displayOut) *displayOut = [display copy];
-    if (description) *description = [NSString stringWithFormat:@"%@; %lu of %lu container paths, %lu names",
+    if (description) *description = [NSString stringWithFormat:@"%@%@; %lu of %lu container paths, %lu names",
+                                      fromMemory ? @"(remembered for this iOS build) " : @"",
                                       [parts componentsJoinedByString:@" + "], (unsigned long)containers.count,
                                       (unsigned long)pathCount, (unsigned long)display.count];
     return YES;
@@ -837,7 +927,7 @@ static BOOL wq_parse_ls_store(NSData *data, NSDictionary **displayOut,
             wq_log(@"names: unknown layout, worked out from the store: %@", autoDescription);
             if (displayOut) *displayOut = autoDisplay;
             if (bundleNameOut) *bundleNameOut = @{};
-            if (containersOut) *containersOut = @{};   // names only, see wq_ls_auto_layout
+            if (containersOut) *containersOut = autoContainers;   // paths only, no identities: see wq_ls_auto_layout
             if (bundlePathsOut) *bundlePathsOut = @{};
             return YES;
         }
@@ -939,7 +1029,7 @@ static BOOL wq_parse_ls_store(NSData *data, NSDictionary **displayOut,
             if (newSummary) wq_log(@"names: unknown layout, worked out from the store: %@", autoDescription);
             if (displayOut) *displayOut = autoDisplay;
             if (bundleNameOut) *bundleNameOut = @{};
-            if (containersOut) *containersOut = @{};   // names only, see wq_ls_auto_layout
+            if (containersOut) *containersOut = autoContainers;   // paths only, no identities: see wq_ls_auto_layout
             if (bundlePathsOut) *bundlePathsOut = @{};
             return YES;
         }
