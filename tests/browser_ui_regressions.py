@@ -27,7 +27,7 @@ require(main, "self->_error = (names || childPaths != nil) ? nil", "empty enumer
 require(main, "item.isRegular = S_ISREG(st.st_mode);", "regular-file metadata")
 require(main, "Only regular files can be viewed.", "special-file view refusal")
 require(main, "wq_backup_original_path(item.path)", "typed backup path derivation")
-require(main, "initWithPath:wq_backup_root() title:WQLocalizedNullable(@\"Backups\")", "Backups root navigation")
+require(main, "initWithPath:wq_backup_root() title:WQLocalizedNullable(@\"File Backups\")", "Backups root navigation")
 require(main, "if (!_version)", "nil editor version refusal")
 forbid(main, "childPaths.count) ? nil : error", "count-based enumeration success check")
 health_present = main.split("- (void)presentPendingHealthFailure", 1)[1].split("// Each set of warnings", 1)[0]

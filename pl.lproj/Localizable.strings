@@ -951,7 +951,6 @@
 "WQ Files has no access to the app's data right now (%@). Nothing was backed up; try again." = "WQ Files nie ma teraz dostępu do danych aplikacji (%@). Nic nie zostało zapisane; spróbuj ponownie.";
 "The app's data folder holds neither Documents nor Library, so there is nothing to back up." = "Folder danych aplikacji nie zawiera ani Documents, ani Library, więc nie ma czego zapisać.";
 "This backup is empty (it was made while WQ Files had no access to the app). Restoring it would delete the app's data, so nothing was changed." = "Ta kopia jest pusta (powstała, gdy WQ Files nie miał dostępu do aplikacji). Przywrócenie jej usunęłoby dane aplikacji, więc nic nie zmieniono.";
-"Vault" = "Vault";
 "Quick Check" = "Quick Check";
 "All your containers, in one place." = "All your containers, in one place.";
 "System" = "System";

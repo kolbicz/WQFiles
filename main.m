@@ -4047,8 +4047,10 @@ static NSArray<UIColor *> *WQPrismTone(NSString *tone)
         _titleLabel.adjustsFontForContentSizeCategory = YES;
         _titleLabel.textColor = UIColor.labelColor;
         _titleLabel.text = title;
-        _titleLabel.numberOfLines = 1;
+        _titleLabel.numberOfLines = compact ? 2 : 1;
         _titleLabel.lineBreakMode = NSLineBreakByTruncatingTail;
+        _titleLabel.adjustsFontSizeToFitWidth = YES;
+        _titleLabel.minimumScaleFactor = 0.8;
         _titleLabel.userInteractionEnabled = NO;
         [self addSubview:_titleLabel];
 
@@ -4091,7 +4093,8 @@ static NSArray<UIColor *> *WQPrismTone(NSString *tone)
             [_metaLabel.topAnchor constraintEqualToAnchor:_titleLabel.bottomAnchor constant:2],
             [_metaLabel.leadingAnchor constraintEqualToAnchor:self.leadingAnchor constant:side],
             [_metaLabel.trailingAnchor constraintEqualToAnchor:self.trailingAnchor constant:-side],
-            [self.heightAnchor constraintEqualToConstant:(compact ? 104 : 140)],
+            [self.heightAnchor constraintGreaterThanOrEqualToConstant:(compact ? 104 : 140)],
+            [self.bottomAnchor constraintGreaterThanOrEqualToAnchor:_metaLabel.bottomAnchor constant:(compact ? 10 : 13)],
         ]];
         if (_moreButton) {
             [NSLayoutConstraint activateConstraints:@[
@@ -4406,24 +4409,10 @@ static UIView *WQPrismSectionHeaderView(NSString *title, NSString *detail)
 
 - (UIView *)buildToolsRail
 {
-    UIScrollView *rail = [[UIScrollView alloc] initWithFrame:CGRectZero];
-    rail.translatesAutoresizingMaskIntoConstraints = NO;
-    rail.showsHorizontalScrollIndicator = NO;
-    rail.alwaysBounceHorizontal = YES;
-    UIStackView *row = [[UIStackView alloc] initWithFrame:CGRectZero];
-    row.translatesAutoresizingMaskIntoConstraints = NO;
-    row.axis = UILayoutConstraintAxisHorizontal;
-    row.spacing = 9;
-    [rail addSubview:row];
-    [NSLayoutConstraint activateConstraints:@[
-        [rail.heightAnchor constraintEqualToConstant:110],
-        [row.topAnchor constraintEqualToAnchor:rail.contentLayoutGuide.topAnchor],
-        [row.bottomAnchor constraintEqualToAnchor:rail.contentLayoutGuide.bottomAnchor],
-        [row.leadingAnchor constraintEqualToAnchor:rail.contentLayoutGuide.leadingAnchor],
-        [row.trailingAnchor constraintEqualToAnchor:rail.contentLayoutGuide.trailingAnchor],
-        [row.heightAnchor constraintEqualToAnchor:rail.frameLayoutGuide.heightAnchor],
-    ]];
-
+    UIStackView *grid = [[UIStackView alloc] initWithFrame:CGRectZero];
+    grid.axis = UILayoutConstraintAxisVertical;
+    grid.spacing = 10;
+    UIStackView *row = nil;
     NSArray<NSArray<NSString *> *> *tools = @[
         @[@"Apps", @"square.grid.3x3.fill", @"sky", @"App Data"],
         @[@"Cache Cleaner", @"sparkles", @"mint", @"Library/Caches"],
@@ -4439,10 +4428,16 @@ static UIView *WQPrismSectionHeaderView(NSString *title, NSString *detail)
                                                                compact:YES];
         card.tag = (NSInteger)i;
         [card addTarget:self action:@selector(openToolCard:) forControlEvents:UIControlEventTouchUpInside];
-        [card.widthAnchor constraintEqualToConstant:124].active = YES;
+        if (i % 2 == 0) {
+            row = [[UIStackView alloc] initWithFrame:CGRectZero];
+            row.axis = UILayoutConstraintAxisHorizontal;
+            row.spacing = 10;
+            row.distribution = UIStackViewDistributionFillEqually;
+            [grid addArrangedSubview:row];
+        }
         [row addArrangedSubview:card];
     }
-    return rail;
+    return grid;
 }
 
 - (UIView *)buildFavoritesRail
@@ -5200,7 +5195,7 @@ static UIView *WQPrismSectionHeaderView(NSString *title, NSString *detail)
 
 - (instancetype)init
 {
-    if ((self = [super initWithStyle:UITableViewStyleInsetGrouped])) self.title = WQLocalizedNullable(@"Vault");
+    if ((self = [super initWithStyle:UITableViewStyleInsetGrouped])) self.title = WQLocalizedNullable(@"Backups");
     return self;
 }
 
@@ -5212,11 +5207,11 @@ static UIView *WQPrismSectionHeaderView(NSString *title, NSString *detail)
     self.tableView.contentInset = UIEdgeInsetsMake(0, 0, 90, 0);
 }
 
-- (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView { return 2; }
+- (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView { return 1; }
 
 - (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section
 {
-    return section == 0 ? 3 : 2;
+    return 3;
 }
 
 - (NSString *)tableView:(UITableView *)tableView titleForFooterInSection:(NSInteger)section
@@ -5229,17 +5224,10 @@ static UIView *WQPrismSectionHeaderView(NSString *title, NSString *detail)
     UITableViewCell *cell = [tableView dequeueReusableCellWithIdentifier:@"prism-vault"]
         ?: [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleSubtitle reuseIdentifier:@"prism-vault"];
     UIListContentConfiguration *c = [UIListContentConfiguration subtitleCellConfiguration];
-    if (indexPath.section == 0) {
-        NSArray<NSString *> *titles = @[@"App Backups", @"Backups", @"Recently Deleted"];
-        NSArray<NSString *> *symbols = @[@"clock.arrow.circlepath", @"archivebox", @"trash.circle"];
-        c.text = WQLocalizedNullable(titles[(NSUInteger)indexPath.row]);
-        c.image = [UIImage systemImageNamed:symbols[(NSUInteger)indexPath.row]];
-    } else {
-        NSArray<NSString *> *titles = @[@"Favorites", @"Log"];
-        NSArray<NSString *> *symbols = @[@"star", @"doc.plaintext"];
-        c.text = WQLocalizedNullable(titles[(NSUInteger)indexPath.row]);
-        c.image = [UIImage systemImageNamed:symbols[(NSUInteger)indexPath.row]];
-    }
+    NSArray<NSString *> *titles = @[@"App Backups", @"File Backups", @"Recently Deleted"];
+    NSArray<NSString *> *symbols = @[@"clock.arrow.circlepath", @"archivebox", @"trash.circle"];
+    c.text = WQLocalizedNullable(titles[(NSUInteger)indexPath.row]);
+    c.image = [UIImage systemImageNamed:symbols[(NSUInteger)indexPath.row]];
     cell.contentConfiguration = c;
     cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
     cell.backgroundColor = [UIColor clearColor];
@@ -5249,18 +5237,13 @@ static UIView *WQPrismSectionHeaderView(NSString *title, NSString *detail)
 - (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath
 {
     [tableView deselectRowAtIndexPath:indexPath animated:YES];
-    if (indexPath.section == 1) {
-        if (indexPath.row == 0) [self.navigationController pushViewController:[WQFavoritesViewController new] animated:YES];
-        else [self.navigationController pushViewController:[WQLogViewController new] animated:YES];
-        return;
-    }
     if (indexPath.row == 0) {
         [NSFileManager.defaultManager createDirectoryAtPath:wq_app_backup_root() withIntermediateDirectories:YES attributes:nil error:nil];
         UIViewController *next = [[WQDirViewController alloc] initWithPath:wq_app_backup_root() title:WQLocalizedNullable(@"App Backups")];
         [self.navigationController pushViewController:next animated:YES];
     } else if (indexPath.row == 1) {
         [NSFileManager.defaultManager createDirectoryAtPath:wq_backup_root() withIntermediateDirectories:YES attributes:nil error:nil];
-        UIViewController *next = [[WQDirViewController alloc] initWithPath:wq_backup_root() title:WQLocalizedNullable(@"Backups")];
+        UIViewController *next = [[WQDirViewController alloc] initWithPath:wq_backup_root() title:WQLocalizedNullable(@"File Backups")];
         [self.navigationController pushViewController:next animated:YES];
     } else {
         [self.navigationController pushViewController:[WQRecentlyDeletedViewController new] animated:YES];
@@ -5295,8 +5278,8 @@ static UIView *WQPrismSectionHeaderView(NSString *title, NSString *detail)
         image:[UIImage systemImageNamed:@"square.grid.3x3.fill"] tag:1];
     cleanNav.tabBarItem = [[UITabBarItem alloc] initWithTitle:WQLocalizedNullable(@"Clean")
         image:[UIImage systemImageNamed:@"sparkles"] tag:2];
-    vaultNav.tabBarItem = [[UITabBarItem alloc] initWithTitle:WQLocalizedNullable(@"Vault")
-        image:[UIImage systemImageNamed:@"shield.fill"] tag:3];
+    vaultNav.tabBarItem = [[UITabBarItem alloc] initWithTitle:WQLocalizedNullable(@"Backups")
+        image:[UIImage systemImageNamed:@"clock.arrow.circlepath"] tag:3];
 
     self.viewControllers = @[homeNav, appsNav, cleanNav, vaultNav];
     self.selectedIndex = 0;

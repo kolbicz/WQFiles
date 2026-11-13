@@ -951,7 +951,6 @@
 "WQ Files has no access to the app's data right now (%@). Nothing was backed up; try again." = "WQ Files 目前无法访问该应用的数据（%@）。未进行任何备份，请重试。";
 "The app's data folder holds neither Documents nor Library, so there is nothing to back up." = "该应用的数据文件夹中既没有 Documents 也没有 Library，因此没有可备份的内容。";
 "This backup is empty (it was made while WQ Files had no access to the app). Restoring it would delete the app's data, so nothing was changed." = "此备份为空（创建时 WQ Files 无法访问该应用）。恢复它会删除应用的数据，因此未做任何更改。";
-"Vault" = "Vault";
 "Quick Check" = "Quick Check";
 "All your containers, in one place." = "All your containers, in one place.";
 "System" = "System";
