@@ -1286,7 +1286,9 @@ static NSString *wq_info_date(struct timespec ts)
         _selectedBackups = [NSMutableSet new];
         _selectedFiles = [NSMutableOrderedSet new];
         // The tab bar stays hidden while browsing (the selection toolbar needs the room).
-        self.hidesBottomBarWhenPushed = YES;
+        // Not on iPad: its tab bar sits at the top, and hiding it there leaves the
+        // navigation bar on the previous screen (no back button, wrong title).
+        self.hidesBottomBarWhenPushed = UIDevice.currentDevice.userInterfaceIdiom == UIUserInterfaceIdiomPhone;
         // Container parents: show bundle/group identifiers instead of UUIDs.
         NSString *parent = path.lastPathComponent;
         _labels = [@[@"Application", @"AppGroup", @"PluginKitPlugin", @"InternalDaemon", @"System"] containsObject:parent];
