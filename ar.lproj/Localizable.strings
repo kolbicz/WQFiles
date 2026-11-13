@@ -947,3 +947,14 @@
 "WQ Files has no access to the app's data right now (%@). Nothing was backed up; try again." = "لا يملك WQ Files حالياً وصولاً إلى بيانات التطبيق (%@). لم يُنسخ أي شيء احتياطياً؛ حاول مرة أخرى.";
 "The app's data folder holds neither Documents nor Library, so there is nothing to back up." = "لا يحتوي مجلد بيانات التطبيق على Documents ولا Library، لذا لا يوجد ما يُنسخ احتياطياً.";
 "This backup is empty (it was made while WQ Files had no access to the app). Restoring it would delete the app's data, so nothing was changed." = "هذه النسخة الاحتياطية فارغة (أُنشئت عندما لم يكن لدى WQ Files وصول إلى التطبيق). استعادتها ستحذف بيانات التطبيق، لذا لم يُغيَّر شيء.";
+"Vault" = "الخزنة";
+"Quick Check" = "فحص سريع";
+"All your containers, in one place." = "كل حاوياتك في مكان واحد.";
+"System" = "النظام";
+"Tap a container to browse it. Long-press for actions." = "اضغط على أي حاوية لاستعراضها، واضغط مطولاً للأفعال.";
+"Backups are checked before every restore." = "تُفحص كل نسخة قبل الاستعادة.";
+"Access check passed." = "فحص الوصول ناجح.";
+"Access check failed." = "فحص الوصول فشل.";
+"Info" = "معلومات";
+"More" = "المزيد";
+"About" = "حول";
