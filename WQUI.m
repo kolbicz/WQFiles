@@ -394,6 +394,7 @@ NSString *wq_size_text(unsigned long long size)
         }
         _glows = glows;
         [self updateColors];
+        [self registerForTraitChanges:@[UITraitUserInterfaceStyle.class] withAction:@selector(updateColors)];
     }
     return self;
 }
@@ -421,7 +422,6 @@ NSString *wq_size_text(unsigned long long size)
 - (void)layoutSubviews
 {
     [super layoutSubviews];
-    [self updateColors];
     _base.frame = self.bounds;
     CGFloat w = self.bounds.size.width, h = self.bounds.size.height;
     _glows[0].frame = CGRectMake(-w * 0.34, -h * 0.08, w * 0.92, w * 0.92);
