@@ -567,6 +567,8 @@ static BOOL wq_dir_size_cancellable(NSString *dir, WQScanCancellation *cancellat
 {
     [super viewDidLoad];
     self.title = WQLocalizedNullable(@"Apps");
+    wq_prism_install_background(self);
+    self.tableView.backgroundColor = [UIColor clearColor];
     UISearchController *search = [[UISearchController alloc] initWithSearchResultsController:nil];
     search.searchResultsUpdater = self;
     search.obscuresBackgroundDuringPresentation = NO;

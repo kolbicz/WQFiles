@@ -951,3 +951,14 @@
 "WQ Files has no access to the app's data right now (%@). Nothing was backed up; try again." = "WQ Files has no access to the app's data right now (%@). Nothing was backed up; try again.";
 "The app's data folder holds neither Documents nor Library, so there is nothing to back up." = "The app's data folder holds neither Documents nor Library, so there is nothing to back up.";
 "This backup is empty (it was made while WQ Files had no access to the app). Restoring it would delete the app's data, so nothing was changed." = "This backup is empty (it was made while WQ Files had no access to the app). Restoring it would delete the app's data, so nothing was changed.";
+"Vault" = "Vault";
+"Quick Check" = "Quick Check";
+"All your containers, in one place." = "All your containers, in one place.";
+"System" = "System";
+"Tap a container to browse it. Long-press for actions." = "Tap a container to browse it. Long-press for actions.";
+"Backups are checked before every restore." = "Backups are checked before every restore.";
+"Access check passed." = "Access check passed.";
+"Access check failed." = "Access check failed.";
+"Info" = "Info";
+"More" = "More";
+"About" = "About";
