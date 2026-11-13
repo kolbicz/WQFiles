@@ -4137,9 +4137,11 @@ static UIView *WQPrismSectionHeaderView(NSString *title, NSString *detail)
 {
     UILabel *label = [UILabel new];
     label.text = title;
-    label.font = [UIFont preferredFontForTextStyle:UIFontTextStyleFootnote];
+    UIFontDescriptor *heading = [[UIFontDescriptor preferredFontDescriptorWithTextStyle:UIFontTextStyleTitle3]
+        fontDescriptorWithSymbolicTraits:UIFontDescriptorTraitBold];
+    label.font = [UIFont fontWithDescriptor:heading size:0];
     label.adjustsFontForContentSizeCategory = YES;
-    label.textColor = UIColor.secondaryLabelColor;
+    label.textColor = UIColor.labelColor;
     label.numberOfLines = 1;
 
     UIStackView *row = [[UIStackView alloc] initWithArrangedSubviews:@[label]];
@@ -4268,6 +4270,7 @@ static UIView *WQPrismSectionHeaderView(NSString *title, NSString *detail)
     _scroll.contentInset = UIEdgeInsetsMake(0, 0, 104, 0);
     _scroll.verticalScrollIndicatorInsets = UIEdgeInsetsMake(0, 0, 104, 0);
     [self.view addSubview:_scroll];
+    [self setContentScrollView:_scroll forEdge:NSDirectionalRectEdgeTop];
 
     _contentStack = [[UIStackView alloc] initWithFrame:CGRectZero];
     _contentStack.translatesAutoresizingMaskIntoConstraints = NO;
