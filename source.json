@@ -22,11 +22,11 @@
       "versions": [
         {
           "version": "0.9.6",
-          "buildVersion": "79",
+          "buildVersion": "80",
           "date": "2026-11-13",
-          "size": 773025,
+          "size": 779001,
           "downloadURL": "https://github.com/kolbicz/WQFiles/releases/download/v0.9.6/WQFiles.ipa",
-          "localizedDescription": "New: Search Inside Folders, Largest Files, Get Info, Duplicate, Copy to Folder, Favorites, Reopen Last Folder, update notice, Extract and Open for ZIPs, Thai. Safer SQLite save and app restore. Fixed: app backups could come out empty; app names on devices with an old app database file.",
+          "localizedDescription": "New: Search Inside Folders, Largest Files, Get Info, Duplicate, Copy to Folder, Favorites, Reopen Last Folder, update notice, Extract and Open for ZIPs, Thai. Safer SQLite save and app restore. Fixed: app backups could come out empty; app names on iOS versions with an unknown app database layout.",
           "minOSVersion": "26.0"
         },
         {

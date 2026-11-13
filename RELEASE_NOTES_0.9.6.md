@@ -26,11 +26,11 @@
 
 ## Fixed
 
-- **App names missing** on some devices: when iOS keeps an old app database file next to the current one, WQ Files now uses the newest one. The Log lists the database files it finds.
+- **App names missing** on some devices (e.g. iOS 26.1): when the app database uses a layout WQ Files doesn't know, it now works out where the names are from the database itself. App identities, which decide where backups go, still only come from the app's own folder tag or a known layout. WQ Files also uses the newest database file when iOS keeps an old one, and the Log lists them.
 - **App backups could come out empty** when WQ Files didn't have access to the app's folder yet; it worked on the second or third try. Backup now fails with "try again" instead, and an empty backup is never restored (restoring one would empty the app's data).
 
 ## Credit
 
 Sandbox technique: [worse_query](https://github.com/forcequitOS/worse_query) by Taj C (forcequit). Container enumeration: [KAMUI](https://github.com/murk-sus/kamui-escape) by murk-sus. Translations: iosrxwy (Simplified Chinese), hfip (Arabic), hooray804 (Korean), Reinascape (Russian). Thanks to everyone who sent Logs and ideas. GPL-3.0-or-later.
 
-SHA-256 of WQFiles.ipa: `2a2beea2d30c38c34ae68295d0f7faffd0516df002e3d3592ad219e9e478402d`
+SHA-256 of WQFiles.ipa: `93ab6b1c88623fc4079c88b5881b368d9ff2481a8288d651c5c86b9b46cf3279`
