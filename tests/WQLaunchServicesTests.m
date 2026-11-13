@@ -227,6 +227,48 @@ static void Test27_3Layout(NSString *path)
     WQCheck([wq_display_name(@"com.example.app") isEqualToString:@"Name27.3"]);
 }
 
+#ifdef WQ_LS_TESTING
+extern BOOL wq_ls_test_known_layouts_off;
+
+// An unknown layout: 0x60-byte records with the bundle id at +0x0c, a type
+// field that repeats one value at +0x04, the container at +0x18 and the
+// display name at +0x20. Names are worked out (three Apple apps confirm the
+// name field); container identities are not taken from a worked-out layout.
+static NSData *StoreWithUnknownLayout(void)
+{
+    NSMutableData *data = [NSMutableData dataWithLength:0x20000];
+    memcpy(data.mutableBytes, "bdsl", 4);
+    NSArray *apps = @[@"com.apple.mobilesafari", @"com.apple.Preferences", @"com.apple.camera"];
+    NSArray *names = @[@"Safari", @"Settings", @"Camera"];
+    uint32_t sid = 1;
+    PutString(data, 0x10000, sid, @"public.mime-type");
+    uint32_t typeRef = sid++ << 2;
+    NSUInteger strings = 0x10080;
+    for (NSUInteger i = 0; i < 30; i++) {
+        NSUInteger record = 0x200 + i * 0x80;
+        NSString *bid = i < apps.count ? apps[i] : [NSString stringWithFormat:@"com.example.app%lu", (unsigned long)i];
+        NSString *name = i < names.count ? names[i] : [NSString stringWithFormat:@"Example %lu", (unsigned long)i];
+        NSString *container = [NSString stringWithFormat:@"/private/var/mobile/Containers/Data/Application/%@", NSUUID.UUID.UUIDString];
+        Put32(data, record + 4, 0x60);
+        Put32(data, record + 8 + 0x04, typeRef);
+        PutString(data, strings, sid, bid); Put32(data, record + 8 + 0x0c, sid++ << 2); strings += 0x80;
+        PutString(data, strings, sid, container); Put32(data, record + 8 + 0x18, sid++ << 2); strings += 0x80;
+        PutString(data, strings, sid, name); Put32(data, record + 8 + 0x20, sid++ << 2); strings += 0x80;
+    }
+    return data;
+}
+
+static void TestUnknownLayoutGivesNamesOnly(NSString *path)
+{
+    WriteData(StoreWithUnknownLayout(), path);
+    [NSUserDefaults.standardUserDefaults setObject:path forKey:@"WQLaunchServicesStore"];
+    WQCheck([wq_display_name(@"com.example.app7") isEqualToString:@"Example 7"]);
+    WQCheck([wq_display_name(@"com.apple.mobilesafari") isEqualToString:@"Safari"]);
+    // No container identity from a worked-out layout.
+    WQCheck(wq_ls_container_paths(nil).count == 0);
+}
+#endif
+
 static void TestOversizedStoreFailsClosed(NSString *path)
 {
     int fd = open(path.fileSystemRepresentation, O_WRONLY | O_CREAT | O_TRUNC, 0600);
@@ -321,6 +363,7 @@ int main(void)
 #ifdef WQ_LS_TESTING
             TestStoreHintPublishesSnapshot(path);
             TestLayoutDiagnosticsBudget();
+            TestUnknownLayoutGivesNamesOnly(path);
 #endif
             TestContainerMapping(path);
             Test27_3Layout(path);
