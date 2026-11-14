@@ -80,7 +80,8 @@ new files.
     tap a row to copy it) are in the long-press menu.
   - The ••• menu has **Search Inside Folders…** (names in all subfolders),
     **Largest Files** (the 100 biggest files below the folder) and **Add to
-    Favorites**; favorites are listed under Tools. With **Reopen Last
+    Favorites**; favorites are listed on the start screen (under Tools in the
+    classic design). With **Reopen Last
     Folder** on (Settings), WQ Files starts in the folder you were in.
   - **Compress** creates a ZIP next to the items; **Extract** (long-press a
     .zip, or tap it and choose **Extract and Open**) unpacks it into a new folder. Entries that would land outside that
@@ -112,21 +113,25 @@ new files.
     JavaScript/TypeScript, Java/Kotlin, Go, Rust, Python, shell, Ruby, Lua;
     up to 1 MB).
 - **Log**: file writes, backups, deletions, restores and errors the app handled, plus the App Group it received.
-- **Allow Deleting** (start screen, on by default): turn it off and nothing
+- **Allow Deleting** (Settings, on by default): turn it off and nothing
   can be deleted, cleared or cleaned; saving, moving and restoring still work.
-- **Show Item Counts** (start screen, off by default): folders show how many
+- **Show Item Counts** (Settings, off by default): folders show how many
   items they hold. Every subfolder is listed for this, which slows down
   folders with many subfolders.
-- **Keep Data Before Restore** (start screen, on by default): restoring an app
+- **Keep Data Before Restore** (Settings, on by default): restoring an app
   backup or a file backup first backs up what's there now, so a failed restore
   can be undone. Turn it off to delete that backup once the restore succeeded.
-- **Reopen Last Folder** (start screen, on by default): WQ Files starts in the
+- **Reopen Last Folder** (Settings, on by default): WQ Files starts in the
   folder you were in, once the startup check has passed.
-- **Check for Updates** (start screen, on by default): at most twice a day WQ
+- **Check for Updates** (Settings, on by default): at most twice a day WQ
   Files downloads the public `source.json` from this repository and shows a
   note on the start screen when a newer version is out. This is its only
   network access; nothing about the device or its data is sent. Turn it off to
   keep WQ Files fully offline.
+- **New Design** (Settings, on by default): the start screen with container
+  cards and Home, Apps, Clean and Backups tabs; Settings opens from the gear.
+  Turn it off for the classic design: one list with Containers, Tools and
+  Settings. The switch takes effect right away.
 
 App names come from LaunchServices' own database, read from lsd's container
 (the LaunchServices API itself refuses this app on 27.x). Apple services that
@@ -137,8 +142,8 @@ symbol tile.
 
 Before a regular file is overwritten or deleted, its contents are copied to
 **Backups** inside the app (also reachable in the Files app). Long-press a
-backup to restore it to its original location. **Recently Deleted** (under
-Backups on the start screen) lists the backed-up files whose original is gone,
+backup to restore it to its original location. **Recently Deleted** (in the
+Backups tab, or under Tools in the classic design) lists the backed-up files whose original is gone,
 newest first: restore one to where it was (missing folders are created), or
 delete it from Backups for good. Deleting a folder deletes everything in it
 after saying how many files that is; every file is copied to Backups first
