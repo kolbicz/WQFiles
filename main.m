@@ -1285,6 +1285,10 @@ static NSString *wq_info_date(struct timespec ts)
         _baseTitle = self.title;
         _selectedBackups = [NSMutableSet new];
         _selectedFiles = [NSMutableOrderedSet new];
+        // The tab bar stays hidden while browsing (the selection toolbar needs the room).
+        // Not on iPad: its tab bar sits at the top, and hiding it there leaves the
+        // navigation bar on the previous screen (no back button, wrong title).
+        self.hidesBottomBarWhenPushed = UIDevice.currentDevice.userInterfaceIdiom == UIUserInterfaceIdiomPhone;
         // Container parents: show bundle/group identifiers instead of UUIDs.
         NSString *parent = path.lastPathComponent;
         _labels = [@[@"Application", @"AppGroup", @"PluginKitPlugin", @"InternalDaemon", @"System"] containsObject:parent];
@@ -1301,6 +1305,10 @@ static NSString *wq_info_date(struct timespec ts)
 - (void)viewDidLoad
 {
     [super viewDidLoad];
+    if (wq_prism_enabled()) {
+        wq_prism_install_background(self);
+        self.tableView.backgroundColor = [UIColor clearColor];
+    }
     self.refreshControl = [UIRefreshControl new];
     [self.refreshControl addTarget:self action:@selector(userRefresh) forControlEvents:UIControlEventValueChanged];
     __weak typeof(self) weakSelf = self;
@@ -1461,7 +1469,8 @@ static NSString *wq_info_date(struct timespec ts)
     CGFloat width = self.tableView.bounds.size.width ?: self.view.bounds.size.width;
     if (!_pathLabel) {
         _pathLabel = [UILabel new];
-        _pathLabel.numberOfLines = 0;
+        _pathLabel.numberOfLines = 2;
+        _pathLabel.lineBreakMode = NSLineBreakByTruncatingMiddle;
         _pathLabel.font = [UIFont monospacedSystemFontOfSize:12 weight:UIFontWeightRegular];
         _pathLabel.semanticContentAttribute = UISemanticContentAttributeForceLeftToRight;
         _pathLabel.textAlignment = NSTextAlignmentLeft;   // paths read left to right in every language
@@ -2416,6 +2425,7 @@ static NSString *wq_info_date(struct timespec ts)
 {
     UITableViewCell *cell = [tableView dequeueReusableCellWithIdentifier:@"item"]
         ?: [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleSubtitle reuseIdentifier:@"item"];
+    cell.backgroundColor = wq_prism_enabled() ? [UIColor clearColor] : nil;
     UIListContentConfiguration *c = cell.defaultContentConfiguration;
     if (_error) {
         c.text = WQLocalizedNullable(@"Cannot open this folder");
@@ -3330,6 +3340,16 @@ static NSString *const kSystemGroupRoot = @"/private/var/containers/Shared/Syste
     [super viewDidLoad];
     self.delegate = self;
     self.interactivePopGestureRecognizer.delegate = self;
+    if (!wq_prism_enabled()) return;
+    self.navigationBar.prefersLargeTitles = YES;
+    UINavigationBarAppearance *appearance = [UINavigationBarAppearance new];
+    [appearance configureWithDefaultBackground];
+    appearance.backgroundColor = [UIColor clearColor];
+    appearance.shadowColor = [UIColor clearColor];
+    self.navigationBar.standardAppearance = appearance;
+    self.navigationBar.scrollEdgeAppearance = appearance;
+    self.navigationBar.compactAppearance = appearance;
+    self.navigationBar.tintColor = [UIColor colorWithRed:0.37 green:0.50 blue:1.0 alpha:1.0];
 }
 
 - (void)navigationController:(UINavigationController *)nav willShowViewController:(UIViewController *)vc animated:(BOOL)animated
@@ -3607,9 +3627,6 @@ static NSString *wq_deleted_place(NSString *original)
 @property (nonatomic, copy, nullable) void (^onPassed)(NSArray<WQHealthCheck *> *checks);
 @end
 
-@interface WQRootViewController : UITableViewController
-@end
-
 static NSString *const kWQLanguagePref = @"WQLanguage";
 
 // The language picked in WQ Files, or nil for the device's.
@@ -3855,6 +3872,1455 @@ static UIImage *wq_language_flag(NSString *code)
 
 @end
 
+#pragma mark - WQ Prism UI
+
+// ---------------------------------------------------------------------------
+// WQ Prism: the first UIKit layer of the redesign. The data and safety logic
+// stays in the existing controllers; these views only present it.
+// ---------------------------------------------------------------------------
+
+static NSArray<UIColor *> *WQPrismTone(NSString *tone)
+{
+    if ([tone isEqualToString:@"violet"]) return @[[UIColor colorWithRed:0.71 green:0.61 blue:1.00 alpha:1], [UIColor colorWithRed:0.43 green:0.31 blue:0.91 alpha:1]];
+    if ([tone isEqualToString:@"mint"])   return @[[UIColor colorWithRed:0.38 green:0.92 blue:0.80 alpha:1], [UIColor colorWithRed:0.04 green:0.67 blue:0.55 alpha:1]];
+    if ([tone isEqualToString:@"amber"])  return @[[UIColor colorWithRed:1.00 green:0.84 blue:0.54 alpha:1], [UIColor colorWithRed:0.88 green:0.55 blue:0.09 alpha:1]];
+    if ([tone isEqualToString:@"pink"])   return @[[UIColor colorWithRed:1.00 green:0.62 blue:0.80 alpha:1], [UIColor colorWithRed:0.87 green:0.23 blue:0.53 alpha:1]];
+    if ([tone isEqualToString:@"sky"])    return @[[UIColor colorWithRed:0.54 green:0.85 blue:1.00 alpha:1], [UIColor colorWithRed:0.17 green:0.58 blue:0.91 alpha:1]];
+    if ([tone isEqualToString:@"orange"]) return @[[UIColor colorWithRed:1.00 green:0.73 blue:0.49 alpha:1], [UIColor colorWithRed:0.89 green:0.42 blue:0.12 alpha:1]];
+    if ([tone isEqualToString:@"indigo"]) return @[[UIColor colorWithRed:0.55 green:0.55 blue:1.00 alpha:1], [UIColor colorWithRed:0.26 green:0.25 blue:0.79 alpha:1]];
+    if ([tone isEqualToString:@"gray"])   return @[[UIColor colorWithRed:0.67 green:0.71 blue:0.80 alpha:1], [UIColor colorWithRed:0.35 green:0.40 blue:0.49 alpha:1]];
+    return @[[UIColor colorWithRed:0.50 green:0.65 blue:1.00 alpha:1], [UIColor colorWithRed:0.24 green:0.38 blue:0.90 alpha:1]];
+}
+
+@interface WQPrismGlassView : UIView
+@property (nonatomic, readonly) UIView *contentView;
+- (instancetype)initWithRadius:(CGFloat)radius;
+@end
+
+@implementation WQPrismGlassView {
+    UIVisualEffectView *_effect;
+}
+
+- (instancetype)initWithRadius:(CGFloat)radius
+{
+    if ((self = [super initWithFrame:CGRectZero])) {
+        self.translatesAutoresizingMaskIntoConstraints = NO;
+        self.layer.cornerRadius = radius;
+        self.layer.cornerCurve = kCACornerCurveContinuous;
+        self.clipsToBounds = YES;
+        self.backgroundColor = [UIColor colorWithWhite:0.42 alpha:0.055];
+
+        _effect = [[UIVisualEffectView alloc] initWithEffect:[UIBlurEffect effectWithStyle:UIBlurEffectStyleSystemMaterial]];
+        _effect.translatesAutoresizingMaskIntoConstraints = NO;
+        _effect.userInteractionEnabled = NO;
+        [self addSubview:_effect];
+        [NSLayoutConstraint activateConstraints:@[
+            [_effect.topAnchor constraintEqualToAnchor:self.topAnchor],
+            [_effect.bottomAnchor constraintEqualToAnchor:self.bottomAnchor],
+            [_effect.leadingAnchor constraintEqualToAnchor:self.leadingAnchor],
+            [_effect.trailingAnchor constraintEqualToAnchor:self.trailingAnchor],
+        ]];
+
+        _contentView = [UIView new];
+        _contentView.translatesAutoresizingMaskIntoConstraints = NO;
+        _contentView.backgroundColor = [UIColor clearColor];
+        [self addSubview:_contentView];
+        [NSLayoutConstraint activateConstraints:@[
+            [_contentView.topAnchor constraintEqualToAnchor:self.topAnchor],
+            [_contentView.bottomAnchor constraintEqualToAnchor:self.bottomAnchor],
+            [_contentView.leadingAnchor constraintEqualToAnchor:self.leadingAnchor],
+            [_contentView.trailingAnchor constraintEqualToAnchor:self.trailingAnchor],
+        ]];
+        [self updateBorder];
+        [self registerForTraitChanges:@[UITraitUserInterfaceStyle.class, UITraitDisplayScale.class]
+                           withAction:@selector(updateBorder)];
+    }
+    return self;
+}
+
+- (void)updateBorder
+{
+    BOOL dark = self.traitCollection.userInterfaceStyle != UIUserInterfaceStyleLight;
+    CGFloat scale = self.traitCollection.displayScale;
+    if (scale <= 0) scale = 3.0;
+    self.layer.borderWidth = 1.0 / scale;
+    self.layer.borderColor = [UIColor colorWithWhite:(dark ? 1.0 : 0.0) alpha:(dark ? 0.14 : 0.08)].CGColor;
+}
+
+@end
+
+@interface WQPrismIconTile : UIView
+- (instancetype)initWithSymbol:(NSString *)symbol tone:(NSString *)tone size:(CGFloat)size;
+@end
+
+@implementation WQPrismIconTile {
+    CAGradientLayer *_gradient;
+    UIImageView *_imageView;
+}
+
+- (instancetype)initWithSymbol:(NSString *)symbol tone:(NSString *)tone size:(CGFloat)size
+{
+    if ((self = [super initWithFrame:CGRectZero])) {
+        self.translatesAutoresizingMaskIntoConstraints = NO;
+        self.userInteractionEnabled = NO;
+        self.layer.cornerRadius = size * 0.29;
+        self.layer.cornerCurve = kCACornerCurveContinuous;
+        self.clipsToBounds = YES;
+        NSArray<UIColor *> *colors = WQPrismTone(tone);
+        _gradient = [CAGradientLayer layer];
+        _gradient.startPoint = CGPointMake(0.0, 0.0);
+        _gradient.endPoint = CGPointMake(1.0, 1.0);
+        _gradient.colors = @[(id)colors[0].CGColor, (id)colors[1].CGColor];
+        [self.layer addSublayer:_gradient];
+
+        UIImageSymbolConfiguration *cfg = [UIImageSymbolConfiguration configurationWithPointSize:size * 0.44
+                                                                                         weight:UIImageSymbolWeightSemibold];
+        _imageView = [[UIImageView alloc] initWithImage:[UIImage systemImageNamed:symbol withConfiguration:cfg]];
+        _imageView.translatesAutoresizingMaskIntoConstraints = NO;
+        _imageView.tintColor = UIColor.whiteColor;
+        _imageView.contentMode = UIViewContentModeScaleAspectFit;
+        [self addSubview:_imageView];
+        [NSLayoutConstraint activateConstraints:@[
+            [self.widthAnchor constraintEqualToConstant:size],
+            [self.heightAnchor constraintEqualToConstant:size],
+            [_imageView.centerXAnchor constraintEqualToAnchor:self.centerXAnchor],
+            [_imageView.centerYAnchor constraintEqualToAnchor:self.centerYAnchor],
+            [_imageView.widthAnchor constraintEqualToConstant:size * 0.60],
+            [_imageView.heightAnchor constraintEqualToConstant:size * 0.60],
+        ]];
+    }
+    return self;
+}
+
+- (void)layoutSubviews
+{
+    [super layoutSubviews];
+    _gradient.frame = self.bounds;
+}
+
+@end
+
+@interface WQPrismCardView : UIControl
+@property (nonatomic, strong) UILabel *titleLabel;
+@property (nonatomic, strong) UILabel *metaLabel;
+@property (nonatomic, strong) UIButton *moreButton;
+- (instancetype)initWithTitle:(NSString *)title
+                         meta:(NSString *)meta
+                       symbol:(NSString *)symbol
+                         tone:(NSString *)tone
+                      compact:(BOOL)compact;
+@end
+
+@implementation WQPrismCardView {
+    WQPrismGlassView *_glass;
+    WQPrismIconTile *_icon;
+    UIImageView *_chevron;
+}
+
+- (instancetype)initWithTitle:(NSString *)title
+                         meta:(NSString *)meta
+                       symbol:(NSString *)symbol
+                         tone:(NSString *)tone
+                      compact:(BOOL)compact
+{
+    if ((self = [super initWithFrame:CGRectZero])) {
+        self.translatesAutoresizingMaskIntoConstraints = NO;
+        self.layer.cornerRadius = compact ? 20 : 24;
+        self.layer.cornerCurve = kCACornerCurveContinuous;
+
+        _glass = [[WQPrismGlassView alloc] initWithRadius:compact ? 20 : 24];
+        _glass.userInteractionEnabled = NO;
+        [self addSubview:_glass];
+        [NSLayoutConstraint activateConstraints:@[
+            [_glass.topAnchor constraintEqualToAnchor:self.topAnchor],
+            [_glass.bottomAnchor constraintEqualToAnchor:self.bottomAnchor],
+            [_glass.leadingAnchor constraintEqualToAnchor:self.leadingAnchor],
+            [_glass.trailingAnchor constraintEqualToAnchor:self.trailingAnchor],
+        ]];
+
+        _icon = [[WQPrismIconTile alloc] initWithSymbol:symbol tone:tone size:compact ? 30 : 36];
+        [self addSubview:_icon];
+
+        UIFont *titleFont = [[UIFontMetrics metricsForTextStyle:UIFontTextStyleSubheadline]
+            scaledFontForFont:[UIFont systemFontOfSize:(compact ? 13.0 : 15.0) weight:UIFontWeightSemibold]];
+        UIFont *metaFont = [[UIFontMetrics metricsForTextStyle:UIFontTextStyleCaption1]
+            scaledFontForFont:[UIFont systemFontOfSize:(compact ? 9.5 : 10.5) weight:UIFontWeightRegular]];
+
+        _titleLabel = [UILabel new];
+        _titleLabel.translatesAutoresizingMaskIntoConstraints = NO;
+        _titleLabel.font = titleFont;
+        _titleLabel.adjustsFontForContentSizeCategory = YES;
+        _titleLabel.textColor = UIColor.labelColor;
+        _titleLabel.text = title;
+        _titleLabel.numberOfLines = compact ? 2 : 1;
+        _titleLabel.lineBreakMode = NSLineBreakByTruncatingTail;
+        _titleLabel.adjustsFontSizeToFitWidth = YES;
+        _titleLabel.minimumScaleFactor = 0.8;
+        _titleLabel.userInteractionEnabled = NO;
+        [self addSubview:_titleLabel];
+
+        _metaLabel = [UILabel new];
+        _metaLabel.translatesAutoresizingMaskIntoConstraints = NO;
+        _metaLabel.font = metaFont;
+        _metaLabel.adjustsFontForContentSizeCategory = YES;
+        _metaLabel.textColor = UIColor.secondaryLabelColor;
+        _metaLabel.text = meta;
+        _metaLabel.numberOfLines = 1;
+        _metaLabel.lineBreakMode = NSLineBreakByTruncatingMiddle;
+        _metaLabel.userInteractionEnabled = NO;
+        [self addSubview:_metaLabel];
+
+        if (!compact) {
+            _moreButton = [UIButton buttonWithType:UIButtonTypeSystem];
+            _moreButton.translatesAutoresizingMaskIntoConstraints = NO;
+            [_moreButton setImage:[UIImage systemImageNamed:@"ellipsis"] forState:UIControlStateNormal];
+            _moreButton.tintColor = UIColor.tertiaryLabelColor;
+            _moreButton.showsMenuAsPrimaryAction = YES;
+            _moreButton.accessibilityLabel = WQLocalizedNullable(@"More");
+            [self addSubview:_moreButton];
+
+            _chevron = [[UIImageView alloc] initWithImage:[UIImage systemImageNamed:@"chevron.right"]];
+            _chevron.translatesAutoresizingMaskIntoConstraints = NO;
+            _chevron.tintColor = UIColor.quaternaryLabelColor;
+            _chevron.image = [_chevron.image imageFlippedForRightToLeftLayoutDirection];
+            _chevron.userInteractionEnabled = NO;
+            [self addSubview:_chevron];
+        }
+
+        CGFloat top = compact ? 10.0 : 13.0;
+        CGFloat side = compact ? 11.0 : 13.0;
+        [NSLayoutConstraint activateConstraints:@[
+            [_icon.topAnchor constraintEqualToAnchor:self.topAnchor constant:top],
+            [_icon.leadingAnchor constraintEqualToAnchor:self.leadingAnchor constant:side],
+            [_titleLabel.topAnchor constraintEqualToAnchor:_icon.bottomAnchor constant:(compact ? 8 : 11)],
+            [_titleLabel.leadingAnchor constraintEqualToAnchor:self.leadingAnchor constant:side],
+            [_titleLabel.trailingAnchor constraintEqualToAnchor:self.trailingAnchor constant:-side],
+            [_metaLabel.topAnchor constraintEqualToAnchor:_titleLabel.bottomAnchor constant:2],
+            [_metaLabel.leadingAnchor constraintEqualToAnchor:self.leadingAnchor constant:side],
+            [_metaLabel.trailingAnchor constraintEqualToAnchor:self.trailingAnchor constant:-side],
+            [self.heightAnchor constraintGreaterThanOrEqualToConstant:(compact ? 104 : 140)],
+            [self.bottomAnchor constraintGreaterThanOrEqualToAnchor:_metaLabel.bottomAnchor constant:(compact ? 10 : 13)],
+        ]];
+        if (_moreButton) {
+            [NSLayoutConstraint activateConstraints:@[
+                [_moreButton.topAnchor constraintEqualToAnchor:self.topAnchor constant:5],
+                [_moreButton.trailingAnchor constraintEqualToAnchor:self.trailingAnchor constant:-5],
+                [_moreButton.widthAnchor constraintEqualToConstant:30],
+                [_moreButton.heightAnchor constraintEqualToConstant:30],
+                [_chevron.trailingAnchor constraintEqualToAnchor:self.trailingAnchor constant:-13],
+                [_chevron.bottomAnchor constraintEqualToAnchor:self.bottomAnchor constant:-12],
+                [_chevron.widthAnchor constraintEqualToConstant:11],
+                [_chevron.heightAnchor constraintEqualToConstant:11],
+            ]];
+        }
+
+        self.isAccessibilityElement = YES;
+        self.accessibilityTraits = UIAccessibilityTraitButton;
+        self.accessibilityLabel = meta.length ? [NSString stringWithFormat:@"%@, %@", title, meta] : title;
+    }
+    return self;
+}
+
+- (void)setHighlighted:(BOOL)highlighted
+{
+    [super setHighlighted:highlighted];
+    [UIView animateWithDuration:0.16 animations:^{
+        self.alpha = highlighted ? 0.82 : 1.0;
+        self.transform = highlighted ? CGAffineTransformMakeScale(0.985, 0.985) : CGAffineTransformIdentity;
+    }];
+}
+
+@end
+
+static NSAttributedString *WQPrismButtonTitle(NSString *title)
+{
+    return [[NSAttributedString alloc] initWithString:title
+        attributes:@{NSFontAttributeName: [UIFont systemFontOfSize:12.0 weight:UIFontWeightSemibold]}];
+}
+
+static UIView *WQPrismSectionHeaderView(NSString *title, NSString *detail)
+{
+    UILabel *label = [UILabel new];
+    label.text = title;
+    UIFontDescriptor *heading = [[UIFontDescriptor preferredFontDescriptorWithTextStyle:UIFontTextStyleTitle3]
+        fontDescriptorWithSymbolicTraits:UIFontDescriptorTraitBold];
+    label.font = [UIFont fontWithDescriptor:heading size:0];
+    label.adjustsFontForContentSizeCategory = YES;
+    label.textColor = UIColor.labelColor;
+    label.numberOfLines = 1;
+
+    UIStackView *row = [[UIStackView alloc] initWithArrangedSubviews:@[label]];
+    row.axis = UILayoutConstraintAxisHorizontal;
+    row.alignment = UIStackViewAlignmentCenter;
+    row.spacing = 8;
+    if (detail.length) {
+        UILabel *right = [UILabel new];
+        right.text = detail;
+        right.font = [UIFont monospacedSystemFontOfSize:10 weight:UIFontWeightRegular];
+        right.textColor = UIColor.tertiaryLabelColor;
+        right.textAlignment = NSTextAlignmentNatural;
+        [row addArrangedSubview:right];
+    }
+    return row;
+}
+
+// Set once the startup check ran (in either design), so switching designs
+// doesn't run it again or reopen the last folder.
+static BOOL wq_startup_checked;
+static void wq_apply_design(void);
+
+@interface WQPrismHomeViewController : UIViewController
+@end
+
+@interface WQPrismSettingsViewController : UITableViewController
+@end
+
+@interface WQPrismVaultViewController : UITableViewController
+@end
+
+@implementation WQPrismHomeViewController {
+    NSArray<NSArray<NSString *> *> *_locations;
+    UIScrollView *_scroll;
+    UIStackView *_contentStack;
+    UIStackView *_containersStack;
+    UIStackView *_favoritesStack;
+    UIStackView *_systemRows;
+    UIView *_systemSection;
+    UIView *_heroView;
+    UIView *_updateBanner;
+    UIView *_statusPill;
+    UILabel *_statusLabel;
+    UILabel *_heroSubtitle;
+    UIButton *_quickButton;
+    NSString *_appGroupName;
+    BOOL _checkingAccess;
+    NSArray<WQHealthCheck *> *_pendingHealthFailure;
+    BOOL _healthRetryScheduled;
+    NSDictionary *_reopenFolder;
+    NSString *_availableVersion;
+}
+
+- (instancetype)init
+{
+    if ((self = [super initWithNibName:nil bundle:nil])) {
+        self.title = WQLocalizedNullable(@"WQ Files");
+    }
+    return self;
+}
+
+- (void)viewDidLoad
+{
+    [super viewDidLoad];
+    wq_prism_install_background(self);
+    self.navigationItem.largeTitleDisplayMode = UINavigationItemLargeTitleDisplayModeAlways;
+    self.navigationController.navigationBar.prefersLargeTitles = YES;
+
+    UIBarButtonItem *gear = [[UIBarButtonItem alloc] initWithImage:[UIImage systemImageNamed:@"gearshape"]
+                                                            style:UIBarButtonItemStylePlain
+                                                           target:self
+                                                           action:@selector(openSettings)];
+    gear.accessibilityLabel = WQLocalizedNullable(@"Settings");
+    self.navigationItem.rightBarButtonItem = gear;
+
+    [self buildInterface];
+    [self rebuildLocations];
+    [self rebuildContainers];
+    [self rebuildFavorites];
+    [self rebuildSystem];
+    [self updateHealthUI];
+
+    __weak typeof(self) weakSelf = self;
+    dispatch_async(wq_io(), ^{
+        NSString *recovery = wq_recover_interrupted_restore();
+        if (recovery) {
+            dispatch_async(dispatch_get_main_queue(), ^{
+                wq_alert(weakSelf, @"Restore recovery", recovery);
+            });
+        }
+        NSString *group = wq_app_group();   // resolves (and logs) the group off the main thread
+        dispatch_async(dispatch_get_main_queue(), ^{
+            typeof(self) strongSelf = weakSelf;
+            if (!strongSelf) return;
+            strongSelf->_appGroupName = group;
+            [strongSelf updateHealthUI];
+        });
+    });
+}
+
+- (void)viewWillAppear:(BOOL)animated
+{
+    [super viewWillAppear:animated];
+    [self rebuildFavorites];
+}
+
+- (void)viewDidAppear:(BOOL)animated
+{
+    [super viewDidAppear:animated];
+    [self presentPendingHealthFailure];
+    if (wq_startup_checked) {
+        _reopenFolder = nil;
+        [NSUserDefaults.standardUserDefaults removeObjectForKey:kWQLastFolderPref];
+        return;
+    }
+    wq_startup_checked = YES;
+    NSDictionary *last = [NSUserDefaults.standardUserDefaults dictionaryForKey:kWQLastFolderPref];
+    if (![NSUserDefaults.standardUserDefaults boolForKey:kWQReopenOffPref] && [last[@"path"] isKindOfClass:NSString.class])
+        _reopenFolder = last;
+    [self checkForUpdate];
+    [self runHealthCheck];
+}
+
+- (void)buildInterface
+{
+    _scroll = [[UIScrollView alloc] initWithFrame:CGRectZero];
+    _scroll.translatesAutoresizingMaskIntoConstraints = NO;
+    _scroll.alwaysBounceVertical = YES;
+    _scroll.showsVerticalScrollIndicator = NO;
+    _scroll.contentInset = UIEdgeInsetsMake(0, 0, 104, 0);
+    _scroll.verticalScrollIndicatorInsets = UIEdgeInsetsMake(0, 0, 104, 0);
+    [self.view addSubview:_scroll];
+    [self setContentScrollView:_scroll forEdge:NSDirectionalRectEdgeTop];
+
+    _contentStack = [[UIStackView alloc] initWithFrame:CGRectZero];
+    _contentStack.translatesAutoresizingMaskIntoConstraints = NO;
+    _contentStack.axis = UILayoutConstraintAxisVertical;
+    _contentStack.alignment = UIStackViewAlignmentFill;
+    _contentStack.spacing = 14;
+    [_scroll addSubview:_contentStack];
+
+    [NSLayoutConstraint activateConstraints:@[
+        [_scroll.topAnchor constraintEqualToAnchor:self.view.topAnchor],
+        [_scroll.bottomAnchor constraintEqualToAnchor:self.view.bottomAnchor],
+        [_scroll.leadingAnchor constraintEqualToAnchor:self.view.leadingAnchor],
+        [_scroll.trailingAnchor constraintEqualToAnchor:self.view.trailingAnchor],
+        [_contentStack.topAnchor constraintEqualToAnchor:_scroll.contentLayoutGuide.topAnchor constant:10],
+        [_contentStack.bottomAnchor constraintEqualToAnchor:_scroll.contentLayoutGuide.bottomAnchor constant:-20],
+        [_contentStack.leadingAnchor constraintEqualToAnchor:_scroll.contentLayoutGuide.leadingAnchor constant:16],
+        [_contentStack.trailingAnchor constraintEqualToAnchor:_scroll.contentLayoutGuide.trailingAnchor constant:-16],
+        [_contentStack.widthAnchor constraintEqualToAnchor:_scroll.frameLayoutGuide.widthAnchor constant:-32],
+    ]];
+
+    [self buildHero];
+    [_contentStack setCustomSpacing:20 afterView:_heroView];
+
+    UIView *containersHeader = WQPrismSectionHeaderView(WQLocalizedNullable(@"Containers"), nil);
+    [_contentStack addArrangedSubview:containersHeader];
+    [_contentStack setCustomSpacing:10 afterView:containersHeader];
+
+    _containersStack = [[UIStackView alloc] initWithFrame:CGRectZero];
+    _containersStack.axis = UILayoutConstraintAxisVertical;
+    _containersStack.spacing = 10;
+    [_contentStack addArrangedSubview:_containersStack];
+
+    UIView *toolsHeader = WQPrismSectionHeaderView(WQLocalizedNullable(@"Tools"), nil);
+    [_contentStack addArrangedSubview:toolsHeader];
+    [_contentStack setCustomSpacing:16 afterView:toolsHeader];
+    [_contentStack addArrangedSubview:[self buildToolsRail]];
+
+    UIView *favoritesHeader = WQPrismSectionHeaderView(WQLocalizedNullable(@"Favorites"), nil);
+    [_contentStack addArrangedSubview:favoritesHeader];
+    [_contentStack setCustomSpacing:16 afterView:favoritesHeader];
+    [_contentStack addArrangedSubview:[self buildFavoritesRail]];
+
+    [self buildSystemSection];
+    [_contentStack addArrangedSubview:[self buildFooter]];
+
+    _contentStack.spacing = 12;
+    [_contentStack setCustomSpacing:22 afterView:[_contentStack.arrangedSubviews lastObject]];
+}
+
+- (void)buildHero
+{
+    WQPrismGlassView *glass = [[WQPrismGlassView alloc] initWithRadius:26];
+    _heroView = glass;
+
+    _statusPill = [UIView new];
+    _statusPill.translatesAutoresizingMaskIntoConstraints = NO;
+    _statusPill.layer.cornerRadius = 9;
+    _statusPill.layer.cornerCurve = kCACornerCurveContinuous;
+
+    _statusLabel = [UILabel new];
+    _statusLabel.translatesAutoresizingMaskIntoConstraints = NO;
+    _statusLabel.font = [UIFont systemFontOfSize:10.5 weight:UIFontWeightSemibold];
+    _statusLabel.textColor = UIColor.systemGreenColor;
+    _statusLabel.text = WQLocalizedNullable(@"Checking access…");
+    [_statusPill addSubview:_statusLabel];
+    [NSLayoutConstraint activateConstraints:@[
+        [_statusLabel.topAnchor constraintEqualToAnchor:_statusPill.topAnchor constant:4],
+        [_statusLabel.bottomAnchor constraintEqualToAnchor:_statusPill.bottomAnchor constant:-4],
+        [_statusLabel.leadingAnchor constraintEqualToAnchor:_statusPill.leadingAnchor constant:9],
+        [_statusLabel.trailingAnchor constraintEqualToAnchor:_statusPill.trailingAnchor constant:-9],
+    ]];
+
+    UILabel *title = [UILabel new];
+    title.text = WQLocalizedNullable(@"All your containers, in one place.");
+    title.font = [UIFont preferredFontForTextStyle:UIFontTextStyleTitle2];
+    title.adjustsFontForContentSizeCategory = YES;
+    title.textColor = UIColor.labelColor;
+    title.numberOfLines = 0;
+    title.maximumContentSizeCategory = UIContentSizeCategoryAccessibilityLarge;
+
+    _heroSubtitle = [UILabel new];
+    _heroSubtitle.font = [UIFont preferredFontForTextStyle:UIFontTextStyleCaption1];
+    _heroSubtitle.adjustsFontForContentSizeCategory = YES;
+    _heroSubtitle.textColor = UIColor.secondaryLabelColor;
+    _heroSubtitle.numberOfLines = 2;
+    _heroSubtitle.text = wq_device_line();
+
+    UIButtonConfiguration *quickCfg = [UIButtonConfiguration tintedButtonConfiguration];
+    quickCfg.attributedTitle = WQPrismButtonTitle(WQLocalizedNullable(@"Quick Check"));
+    quickCfg.image = [UIImage systemImageNamed:@"arrow.clockwise"];
+    quickCfg.imagePadding = 5;
+    quickCfg.cornerStyle = UIButtonConfigurationCornerStyleCapsule;
+    quickCfg.buttonSize = UIButtonConfigurationSizeSmall;
+    __weak typeof(self) weakSelf = self;
+    _quickButton = [UIButton buttonWithConfiguration:quickCfg primaryAction:[UIAction actionWithHandler:^(UIAction *__unused a) {
+        [weakSelf runHealthCheck];
+    }]];
+    _quickButton.tintColor = [UIColor colorWithRed:0.42 green:0.53 blue:1.0 alpha:1.0];
+
+    UIButtonConfiguration *logCfg = [UIButtonConfiguration plainButtonConfiguration];
+    logCfg.attributedTitle = WQPrismButtonTitle(WQLocalizedNullable(@"Log"));
+    logCfg.image = [UIImage systemImageNamed:@"doc.plaintext"];
+    logCfg.imagePadding = 5;
+    logCfg.buttonSize = UIButtonConfigurationSizeSmall;
+    logCfg.baseForegroundColor = UIColor.secondaryLabelColor;
+    UIButton *logButton = [UIButton buttonWithConfiguration:logCfg primaryAction:[UIAction actionWithHandler:^(UIAction *__unused a) {
+        [weakSelf openLog];
+    }]];
+
+    UIStackView *buttons = [[UIStackView alloc] initWithArrangedSubviews:@[_quickButton, logButton]];
+    buttons.axis = UILayoutConstraintAxisHorizontal;
+    buttons.spacing = 8;
+    buttons.alignment = UIStackViewAlignmentCenter;
+
+    UIStackView *text = [[UIStackView alloc] initWithArrangedSubviews:@[_statusPill, title, _heroSubtitle, buttons]];
+    text.axis = UILayoutConstraintAxisVertical;
+    text.alignment = UIStackViewAlignmentLeading;
+    text.spacing = 8;
+
+    WQPrismIconTile *shield = [[WQPrismIconTile alloc] initWithSymbol:@"checkmark.shield.fill" tone:@"mint" size:58];
+    [shield setContentCompressionResistancePriority:UILayoutPriorityRequired forAxis:UILayoutConstraintAxisHorizontal];
+
+    UIStackView *row = [[UIStackView alloc] initWithArrangedSubviews:@[text, shield]];
+    row.axis = UILayoutConstraintAxisHorizontal;
+    row.alignment = UIStackViewAlignmentCenter;
+    row.spacing = 12;
+    row.translatesAutoresizingMaskIntoConstraints = NO;
+    [glass.contentView addSubview:row];
+    [NSLayoutConstraint activateConstraints:@[
+        [row.topAnchor constraintEqualToAnchor:glass.contentView.topAnchor constant:16],
+        [row.bottomAnchor constraintEqualToAnchor:glass.contentView.bottomAnchor constant:-16],
+        [row.leadingAnchor constraintEqualToAnchor:glass.contentView.leadingAnchor constant:16],
+        [row.trailingAnchor constraintEqualToAnchor:glass.contentView.trailingAnchor constant:-16],
+    ]];
+
+    [_contentStack addArrangedSubview:glass];
+    [self updateHealthUI];
+}
+
+- (UIView *)buildToolsRail
+{
+    UIStackView *grid = [[UIStackView alloc] initWithFrame:CGRectZero];
+    grid.axis = UILayoutConstraintAxisVertical;
+    grid.spacing = 10;
+    UIStackView *row = nil;
+    NSArray<NSArray<NSString *> *> *tools = @[
+        @[@"Apps", @"square.grid.3x3.fill", @"sky", @"App Data"],
+        @[@"Cache Cleaner", @"sparkles", @"mint", @"Library/Caches"],
+        @[@"Go to Path…", @"arrow.right.circle.fill", @"violet", @"Path"],
+        @[@"Backups", @"clock.arrow.circlepath", @"amber", @"App Backups"],
+    ];
+    for (NSUInteger i = 0; i < tools.count; i++) {
+        NSArray *t = tools[i];
+        WQPrismCardView *card = [[WQPrismCardView alloc] initWithTitle:WQLocalizedNullable(t[0])
+                                                                  meta:WQLocalizedNullable(t[3])
+                                                                symbol:t[1]
+                                                                  tone:t[2]
+                                                               compact:YES];
+        card.tag = (NSInteger)i;
+        [card addTarget:self action:@selector(openToolCard:) forControlEvents:UIControlEventTouchUpInside];
+        if (i % 2 == 0) {
+            row = [[UIStackView alloc] initWithFrame:CGRectZero];
+            row.axis = UILayoutConstraintAxisHorizontal;
+            row.spacing = 10;
+            row.distribution = UIStackViewDistributionFillEqually;
+            [grid addArrangedSubview:row];
+        }
+        [row addArrangedSubview:card];
+    }
+    return grid;
+}
+
+- (UIView *)buildFavoritesRail
+{
+    UIScrollView *rail = [[UIScrollView alloc] initWithFrame:CGRectZero];
+    rail.translatesAutoresizingMaskIntoConstraints = NO;
+    rail.showsHorizontalScrollIndicator = NO;
+    _favoritesStack = [[UIStackView alloc] initWithFrame:CGRectZero];
+    _favoritesStack.translatesAutoresizingMaskIntoConstraints = NO;
+    _favoritesStack.axis = UILayoutConstraintAxisHorizontal;
+    _favoritesStack.spacing = 7;
+    [rail addSubview:_favoritesStack];
+    [NSLayoutConstraint activateConstraints:@[
+        [rail.heightAnchor constraintEqualToConstant:38],
+        [_favoritesStack.topAnchor constraintEqualToAnchor:rail.contentLayoutGuide.topAnchor],
+        [_favoritesStack.bottomAnchor constraintEqualToAnchor:rail.contentLayoutGuide.bottomAnchor],
+        [_favoritesStack.leadingAnchor constraintEqualToAnchor:rail.contentLayoutGuide.leadingAnchor],
+        [_favoritesStack.trailingAnchor constraintEqualToAnchor:rail.contentLayoutGuide.trailingAnchor],
+        [_favoritesStack.heightAnchor constraintEqualToAnchor:rail.frameLayoutGuide.heightAnchor],
+    ]];
+    return rail;
+}
+
+- (void)buildSystemSection
+{
+    _systemSection = [[UIStackView alloc] initWithFrame:CGRectZero];
+    UIStackView *stack = (UIStackView *)_systemSection;
+    stack.axis = UILayoutConstraintAxisVertical;
+    stack.spacing = 10;
+    [stack addArrangedSubview:WQPrismSectionHeaderView(WQLocalizedNullable(@"System"), nil)];
+
+    WQPrismGlassView *glass = [[WQPrismGlassView alloc] initWithRadius:22];
+    UIStackView *rows = [[UIStackView alloc] initWithFrame:CGRectZero];
+    rows.translatesAutoresizingMaskIntoConstraints = NO;
+    rows.axis = UILayoutConstraintAxisVertical;
+    rows.spacing = 0;
+    [glass.contentView addSubview:rows];
+    [NSLayoutConstraint activateConstraints:@[
+        [rows.topAnchor constraintEqualToAnchor:glass.contentView.topAnchor constant:4],
+        [rows.bottomAnchor constraintEqualToAnchor:glass.contentView.bottomAnchor constant:-4],
+        [rows.leadingAnchor constraintEqualToAnchor:glass.contentView.leadingAnchor constant:10],
+        [rows.trailingAnchor constraintEqualToAnchor:glass.contentView.trailingAnchor constant:-10],
+    ]];
+    _systemRows = rows;
+    [stack addArrangedSubview:glass];
+    [_contentStack addArrangedSubview:stack];
+    [_contentStack setCustomSpacing:16 afterView:stack];
+}
+
+- (UIView *)buildFooter
+{
+    UILabel *version = [UILabel new];
+    version.text = wq_app_version_line();
+    version.font = [UIFont monospacedSystemFontOfSize:9 weight:UIFontWeightRegular];
+    version.textColor = UIColor.tertiaryLabelColor;
+    version.textAlignment = NSTextAlignmentCenter;
+
+    UIButtonConfiguration *linkCfg = [UIButtonConfiguration plainButtonConfiguration];
+    linkCfg.title = @"GitHub";
+    linkCfg.image = [UIImage systemImageNamed:@"chevron.left.forwardslash.chevron.right"];
+    linkCfg.imagePadding = 4;
+    linkCfg.buttonSize = UIButtonConfigurationSizeSmall;
+    linkCfg.baseForegroundColor = UIColor.secondaryLabelColor;
+    UIButton *github = [UIButton buttonWithConfiguration:linkCfg primaryAction:[UIAction actionWithHandler:^(UIAction *__unused a) {
+        [UIApplication.sharedApplication openURL:[NSURL URLWithString:@"https://github.com/kolbicz"] options:@{} completionHandler:nil];
+    }]];
+
+    UIButtonConfiguration *xcfg = [UIButtonConfiguration plainButtonConfiguration];
+    xcfg.title = @"@_kolbicz";
+    xcfg.image = [UIImage systemImageNamed:@"at"];
+    xcfg.imagePadding = 4;
+    xcfg.buttonSize = UIButtonConfigurationSizeSmall;
+    xcfg.baseForegroundColor = UIColor.secondaryLabelColor;
+    UIButton *x = [UIButton buttonWithConfiguration:xcfg primaryAction:[UIAction actionWithHandler:^(UIAction *__unused a) {
+        [UIApplication.sharedApplication openURL:[NSURL URLWithString:@"https://x.com/_kolbicz"] options:@{} completionHandler:nil];
+    }]];
+
+    UIStackView *links = [[UIStackView alloc] initWithArrangedSubviews:@[github, x]];
+    links.axis = UILayoutConstraintAxisHorizontal;
+    links.spacing = 12;
+    links.alignment = UIStackViewAlignmentCenter;
+
+    UIButtonConfiguration *creditCfg = [UIButtonConfiguration plainButtonConfiguration];
+    creditCfg.attributedTitle = [[NSAttributedString alloc] initWithString:WQLocalized(@"Sandbox escape: worse_query by @forcequitOS")
+        attributes:@{NSFontAttributeName: [UIFont preferredFontForTextStyle:UIFontTextStyleCaption2]}];
+    creditCfg.buttonSize = UIButtonConfigurationSizeSmall;
+    creditCfg.baseForegroundColor = UIColor.tertiaryLabelColor;
+    UIButton *credit = [UIButton buttonWithConfiguration:creditCfg primaryAction:[UIAction actionWithHandler:^(UIAction *__unused a) {
+        [UIApplication.sharedApplication openURL:[NSURL URLWithString:@"https://x.com/forcequitOS"] options:@{} completionHandler:nil];
+    }]];
+
+    UIStackView *stack = [[UIStackView alloc] initWithArrangedSubviews:@[version, links, credit]];
+    stack.axis = UILayoutConstraintAxisVertical;
+    stack.alignment = UIStackViewAlignmentCenter;
+    stack.spacing = 7;
+    return stack;
+}
+
+- (void)rebuildLocations
+{
+    NSMutableArray<NSArray<NSString *> *> *locations = [@[
+        @[@"App Data", @"/private/var/mobile/Containers/Data/Application", @"square.grid.2x2"],
+        @[@"App Groups", @"/private/var/mobile/Containers/Shared/AppGroup", @"square.stack.3d.up"],
+        @[@"Extension Data", @"/private/var/mobile/Containers/Data/PluginKitPlugin", @"puzzlepiece.extension"],
+        @[@"Internal Daemons", @"/private/var/mobile/Containers/Data/InternalDaemon", @"gearshape.2"],
+    ] mutableCopy];
+    if (wq_app_bundles_reachable())
+        [locations addObject:@[@"App Bundles", @"/private/var/containers/Bundle/Application", @"app.badge"]];
+    if (wq_system_areas_reachable())
+        [locations addObject:@[@"System Data", @"/private/var/containers/Data/System", @"cpu"]];
+    _locations = locations;
+}
+
+- (NSString *)shortPath:(NSString *)path
+{
+    NSArray<NSString *> *parts = [path componentsSeparatedByString:@"/"];
+    NSMutableArray<NSString *> *tail = [NSMutableArray new];
+    for (NSString *part in [parts reverseObjectEnumerator]) {
+        if (!part.length) continue;
+        [tail insertObject:part atIndex:0];
+        if (tail.count == 2) break;
+    }
+    return [tail componentsJoinedByString:@"/"];
+}
+
+- (NSString *)toneForContainer:(NSString *)title
+{
+    if ([title isEqualToString:@"App Data"]) return @"blue";
+    if ([title isEqualToString:@"App Groups"]) return @"violet";
+    if ([title isEqualToString:@"Extension Data"]) return @"orange";
+    if ([title isEqualToString:@"Internal Daemons"]) return @"mint";
+    if ([title isEqualToString:@"App Bundles"]) return @"sky";
+    if ([title isEqualToString:@"System Data"]) return @"indigo";
+    return @"blue";
+}
+
+- (UIMenu *)containerMenuForIndex:(NSUInteger)index
+{
+    NSArray<NSString *> *location = _locations[index];
+    NSString *title = WQLocalizedNullable(location[0]);
+    NSString *path = location[1];
+    NSString *canonical = WQCanonicalVarPath(path);
+    BOOL saved = wq_favorite_index(wq_favorites(), canonical) != NSNotFound;
+    __weak typeof(self) weakSelf = self;
+
+    UIAction *open = [UIAction actionWithTitle:WQLocalizedNullable(@"Open")
+                                        image:[UIImage systemImageNamed:@"folder"]
+                                   identifier:nil
+                                      handler:^(UIAction *__unused a) {
+        [weakSelf openPath:path title:title];
+    }];
+    UIAction *favorite = [UIAction actionWithTitle:WQLocalizedNullable(saved ? @"Remove from Favorites" : @"Add to Favorites")
+                                            image:[UIImage systemImageNamed:saved ? @"star.slash" : @"star"]
+                                       identifier:nil
+                                          handler:^(UIAction *__unused a) {
+        wq_set_favorite(canonical, title, NO, !saved);
+        [weakSelf rebuildFavorites];
+    }];
+    UIAction *copy = [UIAction actionWithTitle:WQLocalizedNullable(@"Copy Path")
+                                        image:[UIImage systemImageNamed:@"doc.on.doc"]
+                                   identifier:nil
+                                      handler:^(UIAction *__unused a) {
+        UIPasteboard.generalPasteboard.string = path;
+    }];
+    UIAction *info = [UIAction actionWithTitle:WQLocalizedNullable(@"Info")
+                                        image:[UIImage systemImageNamed:@"info.circle"]
+                                   identifier:nil
+                                      handler:^(UIAction *__unused a) {
+        wq_alert(weakSelf, title, WQVerbatim(path));
+    }];
+    return [UIMenu menuWithTitle:@"" children:@[open, favorite, copy, info]];
+}
+
+- (void)rebuildContainers
+{
+    for (UIView *view in _containersStack.arrangedSubviews) {
+        [_containersStack removeArrangedSubview:view];
+        [view removeFromSuperview];
+    }
+    NSMutableArray<WQPrismCardView *> *cards = [NSMutableArray new];
+    for (NSUInteger i = 0; i < _locations.count; i++) {
+        NSArray<NSString *> *location = _locations[i];
+        if ([location[0] isEqualToString:@"System Data"]) continue;
+        NSString *title = WQLocalizedNullable(location[0]);
+        WQPrismCardView *card = [[WQPrismCardView alloc] initWithTitle:title
+                                                                  meta:[self shortPath:location[1]]
+                                                                symbol:location[2]
+                                                                  tone:[self toneForContainer:location[0]]
+                                                               compact:NO];
+        card.tag = (NSInteger)i;
+        [card addTarget:self action:@selector(openContainerCard:) forControlEvents:UIControlEventTouchUpInside];
+        card.moreButton.menu = [self containerMenuForIndex:i];
+        card.metaLabel.semanticContentAttribute = UISemanticContentAttributeForceLeftToRight;
+        card.metaLabel.textAlignment = NSTextAlignmentLeft;
+        [cards addObject:card];
+    }
+    for (NSUInteger i = 0; i < cards.count; i += 2) {
+        WQPrismCardView *left = cards[i];
+        UIView *right = (i + 1 < cards.count) ? cards[i + 1] : [UIView new];
+        UIStackView *row = [[UIStackView alloc] initWithArrangedSubviews:@[left, right]];
+        row.axis = UILayoutConstraintAxisHorizontal;
+        row.spacing = 10;
+        row.distribution = UIStackViewDistributionFillEqually;
+        [_containersStack addArrangedSubview:row];
+    }
+    if (!wq_system_areas_reachable()) {
+        UILabel *note = [UILabel new];
+        note.text = WQLocalized(@"On iOS 26, System Data and System Groups can't be reached (worse_query covers them on iOS 27 only), and Internal Daemons need a scan of every file id: the first one can take most of an hour on a well-used device, later ones only check new files.");
+        note.font = [UIFont preferredFontForTextStyle:UIFontTextStyleCaption1];
+        note.adjustsFontForContentSizeCategory = YES;
+        note.textColor = UIColor.secondaryLabelColor;
+        note.numberOfLines = 0;
+        [_containersStack addArrangedSubview:note];
+    }
+}
+
+- (void)rebuildFavorites
+{
+    for (UIView *view in _favoritesStack.arrangedSubviews) {
+        [_favoritesStack removeArrangedSubview:view];
+        [view removeFromSuperview];
+    }
+    NSArray<NSDictionary *> *favorites = wq_favorites();
+    if (!favorites.count) {
+        UILabel *empty = [UILabel new];
+        empty.text = WQLocalizedNullable(@"Add a folder from its More menu.");
+        empty.font = [UIFont preferredFontForTextStyle:UIFontTextStyleCaption1];
+        empty.textColor = UIColor.tertiaryLabelColor;
+        [_favoritesStack addArrangedSubview:empty];
+        return;
+    }
+    __weak typeof(self) weakSelf = self;
+    for (NSDictionary *entry in favorites) {
+        NSString *path = entry[@"path"];
+        if (![path isKindOfClass:NSString.class]) continue;
+        UIButtonConfiguration *cfg = [UIButtonConfiguration tintedButtonConfiguration];
+        cfg.title = entry[@"title"] ?: path.lastPathComponent;
+        cfg.image = [UIImage systemImageNamed:@"star.fill"];
+        cfg.imagePadding = 4;
+        cfg.cornerStyle = UIButtonConfigurationCornerStyleCapsule;
+        cfg.buttonSize = UIButtonConfigurationSizeSmall;
+        UIButton *button = [UIButton buttonWithConfiguration:cfg primaryAction:[UIAction actionWithHandler:^(UIAction *__unused a) {
+            [weakSelf openPath:path title:entry[@"title"] ?: path.lastPathComponent];
+        }]];
+        button.tintColor = UIColor.systemOrangeColor;
+        [_favoritesStack addArrangedSubview:button];
+    }
+}
+
+- (void)rebuildSystem
+{
+    for (UIView *view in _systemRows.arrangedSubviews) {
+        [_systemRows removeArrangedSubview:view];
+        [view removeFromSuperview];
+    }
+    BOOL hasRows = NO;
+    if (wq_system_areas_reachable()) {
+        hasRows = YES;
+        [_systemRows addArrangedSubview:[self systemRowWithTitle:WQLocalizedNullable(@"System Data")
+                                                         subtitle:@"/containers/Data/System"
+                                                           symbol:@"cpu"
+                                                             tone:@"indigo"
+                                                         selector:@selector(openSystemData)]];
+        [_systemRows addArrangedSubview:[self systemRowWithTitle:WQLocalizedNullable(@"System Groups")
+                                                         subtitle:@"MobileGestalt · Supervision"
+                                                           symbol:@"lock.square.stack"
+                                                             tone:@"violet"
+                                                         selector:@selector(openSystemGroups)]];
+    }
+    _systemSection.hidden = !hasRows;
+}
+
+- (UIControl *)systemRowWithTitle:(NSString *)title
+                         subtitle:(NSString *)subtitle
+                           symbol:(NSString *)symbol
+                             tone:(NSString *)tone
+                         selector:(SEL)selector
+{
+    UIControl *row = [UIControl new];
+    row.translatesAutoresizingMaskIntoConstraints = NO;
+
+    WQPrismIconTile *icon = [[WQPrismIconTile alloc] initWithSymbol:symbol tone:tone size:30];
+    [row addSubview:icon];
+
+    UILabel *name = [UILabel new];
+    name.translatesAutoresizingMaskIntoConstraints = NO;
+    name.text = title;
+    name.font = [UIFont preferredFontForTextStyle:UIFontTextStyleSubheadline];
+    name.textColor = UIColor.labelColor;
+    name.numberOfLines = 1;
+    [row addSubview:name];
+
+    UILabel *sub = [UILabel new];
+    sub.translatesAutoresizingMaskIntoConstraints = NO;
+    sub.text = subtitle;
+    sub.font = [UIFont preferredFontForTextStyle:UIFontTextStyleCaption2];
+    sub.textColor = UIColor.secondaryLabelColor;
+    sub.numberOfLines = 1;
+    sub.lineBreakMode = NSLineBreakByTruncatingMiddle;
+    [row addSubview:sub];
+
+    UIImageView *chevron = [[UIImageView alloc] initWithImage:[UIImage systemImageNamed:@"chevron.right"]];
+    chevron.translatesAutoresizingMaskIntoConstraints = NO;
+    chevron.tintColor = UIColor.tertiaryLabelColor;
+    chevron.image = [chevron.image imageFlippedForRightToLeftLayoutDirection];
+    [row addSubview:chevron];
+
+    [NSLayoutConstraint activateConstraints:@[
+        [row.heightAnchor constraintEqualToConstant:54],
+        [icon.leadingAnchor constraintEqualToAnchor:row.leadingAnchor],
+        [icon.centerYAnchor constraintEqualToAnchor:row.centerYAnchor],
+        [name.topAnchor constraintEqualToAnchor:row.topAnchor constant:7],
+        [name.leadingAnchor constraintEqualToAnchor:icon.trailingAnchor constant:9],
+        [name.trailingAnchor constraintEqualToAnchor:chevron.leadingAnchor constant:-8],
+        [sub.topAnchor constraintEqualToAnchor:name.bottomAnchor constant:1],
+        [sub.leadingAnchor constraintEqualToAnchor:name.leadingAnchor],
+        [sub.trailingAnchor constraintEqualToAnchor:name.trailingAnchor],
+        [chevron.trailingAnchor constraintEqualToAnchor:row.trailingAnchor constant:-6],
+        [chevron.centerYAnchor constraintEqualToAnchor:row.centerYAnchor],
+        [chevron.widthAnchor constraintEqualToConstant:11],
+        [chevron.heightAnchor constraintEqualToConstant:11],
+    ]];
+    [row addTarget:self action:selector forControlEvents:UIControlEventTouchUpInside];
+    return row;
+}
+
+- (void)openContainerCard:(WQPrismCardView *)sender
+{
+    if (sender.tag < 0 || (NSUInteger)sender.tag >= _locations.count) return;
+    NSArray<NSString *> *location = _locations[(NSUInteger)sender.tag];
+    if ([location[0] isEqualToString:@"System Data"]) {
+        [self openSystemData];
+        return;
+    }
+    [self openPath:location[1] title:WQLocalizedNullable(location[0])];
+}
+
+- (void)openToolCard:(WQPrismCardView *)sender
+{
+    switch (sender.tag) {
+        case 0: [self openTab:1]; break;
+        case 1: [self openTab:2]; break;
+        case 2: [self goToPath]; break;
+        case 3: [self openTab:3]; break;
+        default: break;
+    }
+}
+
+- (void)openTab:(NSInteger)index
+{
+    if (self.tabBarController) {
+        self.tabBarController.selectedIndex = index;
+        return;
+    }
+    if (index == 1) [self.navigationController pushViewController:[WQAppsViewController new] animated:YES];
+    else if (index == 2) [self.navigationController pushViewController:[WQCacheCleanerViewController new] animated:YES];
+    else if (index == 3) [self.navigationController pushViewController:[WQPrismVaultViewController new] animated:YES];
+}
+
+- (void)openPath:(NSString *)path title:(NSString *)title
+{
+    WQDirViewController *dir = [[WQDirViewController alloc] initWithPath:path title:title];
+    [self.navigationController pushViewController:dir animated:YES];
+}
+
+- (void)openSystemData
+{
+    [self openPath:@"/private/var/containers/Data/System" title:WQLocalizedNullable(@"System Data")];
+}
+
+- (void)openSystemGroups
+{
+    [self.navigationController pushViewController:[WQSystemGroupsViewController new] animated:YES];
+}
+
+- (void)openLog
+{
+    [self.navigationController pushViewController:[WQLogViewController new] animated:YES];
+}
+
+- (void)openSettings
+{
+    WQPrismSettingsViewController *settings = [WQPrismSettingsViewController new];
+    WQNavigationController *nav = [[WQNavigationController alloc] initWithRootViewController:settings];
+    nav.modalPresentationStyle = UIModalPresentationPageSheet;
+    UISheetPresentationController *sheet = nav.sheetPresentationController;
+    if (sheet) {
+        sheet.detents = @[UISheetPresentationControllerDetent.largeDetent];
+        sheet.prefersGrabberVisible = YES;
+        sheet.preferredCornerRadius = 32;
+    }
+    [self presentViewController:nav animated:YES completion:nil];
+}
+
+- (void)goToPath
+{
+    UIAlertController *alert = wq_alert_controller(@"Go to Path", @"A folder or file path", UIAlertControllerStyleAlert);
+    [alert addTextFieldWithConfigurationHandler:^(UITextField *f) {
+        f.text = UIPasteboard.generalPasteboard.hasStrings && [UIPasteboard.generalPasteboard.string hasPrefix:@"/"]
+            ? UIPasteboard.generalPasteboard.string : @"/private/var/";
+        f.autocapitalizationType = UITextAutocapitalizationTypeNone;
+        f.autocorrectionType = UITextAutocorrectionTypeNo;
+        f.clearButtonMode = UITextFieldViewModeAlways;
+    }];
+    [alert addAction:wq_alert_action(@"Cancel", UIAlertActionStyleCancel, nil)];
+    __weak typeof(self) weakSelf = self;
+    [alert addAction:wq_alert_action(@"Open", UIAlertActionStyleDefault, ^(UIAlertAction *__unused a) {
+        NSString *path = alert.textFields.firstObject.text.stringByStandardizingPath;
+        if (![path hasPrefix:@"/"]) return;
+        dispatch_async(wq_io(), ^{
+            struct stat st;
+            BOOL exists = wq_stat(path, &st);
+            BOOL isDir = exists && S_ISDIR(st.st_mode);
+            if (exists && S_ISLNK(st.st_mode)) {
+                struct stat target;
+                isDir = stat(path.fileSystemRepresentation, &target) == 0 && S_ISDIR(target.st_mode);
+            }
+            dispatch_async(dispatch_get_main_queue(), ^{
+                if (!exists) { wq_alert(weakSelf, @"Not found", path); return; }
+                if (!isDir) { wq_open_file(weakSelf.navigationController, path, NO, WQOpenAuto); return; }
+                [weakSelf openPath:path title:nil];
+            });
+        });
+    })];
+    [self presentViewController:alert animated:YES completion:nil];
+}
+
+// MARK: Access check
+
+- (void)runHealthCheck
+{
+    if (_checkingAccess) return;
+    _checkingAccess = YES;
+    [self updateHealthUI];
+    __weak typeof(self) weakSelf = self;
+    dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
+        NSArray<WQHealthCheck *> *checks = wq_health_run(nil);
+        dispatch_async(dispatch_get_main_queue(), ^{
+            [weakSelf healthCheckFinished:checks];
+        });
+    });
+}
+
+- (void)healthCheckFinished:(NSArray<WQHealthCheck *> *)checks
+{
+    _checkingAccess = NO;
+    _pendingHealthFailure = nil;
+    [self rebuildLocations];
+    [self rebuildContainers];
+    [self rebuildSystem];
+    WQHealthState worst = wq_health_worst(checks);
+    if (worst >= WQHealthFailed) _pendingHealthFailure = checks;
+    [self updateHealthUI];
+    if (worst < WQHealthFailed) [self reopenLastFolder];
+    else _reopenFolder = nil;
+    if (worst == WQHealthWarning) { [self showHealthWarnings:checks]; return; }
+    if (worst < WQHealthFailed) return;
+    [self presentPendingHealthFailure];
+}
+
+- (void)updateHealthUI
+{
+    UIColor *tint = UIColor.systemGreenColor;
+    if (_checkingAccess) {
+        tint = UIColor.systemOrangeColor;
+        _statusLabel.text = WQLocalizedNullable(@"Checking access…");
+    } else if (!_appGroupName.length) {
+        tint = UIColor.systemOrangeColor;
+        _statusLabel.text = WQLocalizedNullable(@"No App Group");
+    } else if (_pendingHealthFailure.count) {
+        tint = UIColor.systemRedColor;
+        _statusLabel.text = WQLocalizedNullable(@"Access check failed.");
+    } else {
+        tint = UIColor.systemGreenColor;
+        _statusLabel.text = WQLocalizedNullable(@"Access check passed.");
+    }
+    _statusLabel.textColor = tint;
+    _statusPill.backgroundColor = [tint colorWithAlphaComponent:0.13];
+    _heroSubtitle.text = _appGroupName.length
+        ? [NSString stringWithFormat:@"%@\n%@", wq_device_line(), _appGroupName]
+        : [NSString stringWithFormat:@"%@\n%@", wq_device_line(), WQLocalizedNullable(@"No App Group")];
+    _quickButton.enabled = !_checkingAccess;
+    UIButtonConfiguration *cfg = _quickButton.configuration;
+    cfg.attributedTitle = WQPrismButtonTitle(_checkingAccess ? WQLocalizedNullable(@"Checking access…") : WQLocalizedNullable(@"Quick Check"));
+    _quickButton.configuration = cfg;
+}
+
+- (BOOL)healthFailureCanPresent
+{
+    if (!self.view.window) return NO;
+    if (self.tabBarController && self.tabBarController.selectedViewController != self.navigationController) return NO;
+    if (self.navigationController && self.navigationController.topViewController != self) return NO;
+    UIViewController *host = self.tabBarController ?: self.navigationController ?: self;
+    if (host.presentedViewController) return NO;
+    return UIApplication.sharedApplication.applicationState == UIApplicationStateActive;
+}
+
+- (void)presentPendingHealthFailure
+{
+    NSArray<WQHealthCheck *> *checks = _pendingHealthFailure;
+    if (!checks) return;
+    if (![self healthFailureCanPresent]) {
+        if (_healthRetryScheduled) return;
+        _healthRetryScheduled = YES;
+        __weak typeof(self) weakSelf = self;
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+            typeof(self) strongSelf = weakSelf;
+            if (!strongSelf) return;
+            strongSelf->_healthRetryScheduled = NO;
+            [strongSelf presentPendingHealthFailure];
+        });
+        return;
+    }
+    _pendingHealthFailure = nil;
+    WQHealthViewController *health = [[WQHealthViewController alloc] initWithChecks:checks];
+    __weak typeof(self) weakSelf = self;
+    health.onPassed = ^(NSArray<WQHealthCheck *> *passed) {
+        [weakSelf rebuildLocations];
+        [weakSelf rebuildContainers];
+        [weakSelf rebuildSystem];
+        [weakSelf updateHealthUI];
+        if (wq_health_worst(passed) == WQHealthWarning) [weakSelf showHealthWarnings:passed];
+    };
+    WQNavigationController *nav = [[WQNavigationController alloc] initWithRootViewController:health];
+    nav.modalPresentationStyle = UIModalPresentationFullScreen;
+    nav.modalInPresentation = YES;
+    [(self.tabBarController ?: self.navigationController ?: self) presentViewController:nav animated:YES completion:nil];
+}
+
+// Each set of warnings once per build, so the same notice doesn't repeat on
+// every launch.
+- (void)showHealthWarnings:(NSArray<WQHealthCheck *> *)checks
+{
+    NSMutableArray<NSString *> *lines = [NSMutableArray new];
+    for (WQHealthCheck *c in checks)
+        if (c.state == WQHealthWarning) [lines addObject:[NSString stringWithFormat:@"%@: %@", c.title, c.detail]];
+    NSString *text = [lines componentsJoinedByString:@"\n\n"];
+    NSString *key = [NSString stringWithFormat:@"%@|%@", NSBundle.mainBundle.infoDictionary[@"CFBundleVersion"], text];
+    NSUserDefaults *defaults = NSUserDefaults.standardUserDefaults;
+    if ([[defaults stringForKey:@"WQHealthWarned"] isEqualToString:key]) return;
+    [defaults setObject:key forKey:@"WQHealthWarned"];
+    UIAlertController *alert = wq_alert_controller(@"Not everything works here", text, UIAlertControllerStyleAlert);
+    [alert addAction:wq_alert_action(@"OK", UIAlertActionStyleCancel, nil)];
+    UIViewController *host = self.tabBarController ?: self.navigationController ?: self;
+    while (host.presentedViewController) host = host.presentedViewController;
+    [host presentViewController:alert animated:YES completion:nil];
+}
+
+- (void)reopenLastFolder
+{
+    NSDictionary *last = _reopenFolder;
+    _reopenFolder = nil;
+    if (!last) return;
+    NSString *path = last[@"path"];
+    if (![path isKindOfClass:NSString.class]) return;
+    __weak typeof(self) weakSelf = self;
+    dispatch_async(wq_io(), ^{
+        struct stat st;
+        BOOL folder = wq_stat(path, &st) && S_ISDIR(st.st_mode);
+        dispatch_async(dispatch_get_main_queue(), ^{
+            if (!folder || ![weakSelf healthFailureCanPresent]) return;
+            WQDirViewController *dir = [[WQDirViewController alloc] initWithPath:path
+                title:[last[@"title"] isKindOfClass:NSString.class] ? last[@"title"] : path.lastPathComponent];
+            dir.readOnly = [last[@"readOnly"] boolValue];
+            [weakSelf.navigationController pushViewController:dir animated:YES];
+        });
+    });
+}
+
+// MARK: Update check
+
+- (void)checkForUpdate
+{
+    NSUserDefaults *defaults = NSUserDefaults.standardUserDefaults;
+    if ([defaults boolForKey:kWQUpdateCheckOffPref]) return;
+    NSDate *last = [defaults objectForKey:kWQUpdateCheckedPref];
+    NSString *known = [defaults stringForKey:@"WQUpdateAvailable"];
+    NSString *mine = NSBundle.mainBundle.infoDictionary[@"CFBundleShortVersionString"] ?: @"0";
+    if (known.length && [known compare:mine options:NSNumericSearch] == NSOrderedDescending) [self showUpdateBanner:known];
+    if ([last isKindOfClass:NSDate.class] && -last.timeIntervalSinceNow < 12 * 3600) return;
+    NSURLSessionConfiguration *config = [NSURLSessionConfiguration ephemeralSessionConfiguration];
+    config.timeoutIntervalForRequest = 15;
+    config.HTTPCookieStorage = nil;
+    NSURL *url = [NSURL URLWithString:@"https://raw.githubusercontent.com/kolbicz/WQFiles/main/source.json"];
+    __weak typeof(self) weakSelf = self;
+    [[[NSURLSession sessionWithConfiguration:config] dataTaskWithURL:url completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
+        NSInteger status = [response isKindOfClass:NSHTTPURLResponse.class] ? ((NSHTTPURLResponse *)response).statusCode : 0;
+        if (error || status != 200 || data.length > 1024 * 1024) {
+            wq_log(@"update check: failed (%@)", error.localizedDescription ?: [NSString stringWithFormat:@"HTTP %ld", (long)status]);
+            return;
+        }
+        id json = [NSJSONSerialization JSONObjectWithData:data options:0 error:nil];
+        id apps = [json isKindOfClass:NSDictionary.class] ? json[@"apps"] : nil;
+        id app = [apps isKindOfClass:NSArray.class] && [apps count] ? [apps firstObject] : nil;
+        id version = [app isKindOfClass:NSDictionary.class] ? app[@"version"] : nil;
+        if (![version isKindOfClass:NSString.class] || [version length] > 20) return;
+        dispatch_async(dispatch_get_main_queue(), ^{
+            [defaults setObject:NSDate.date forKey:kWQUpdateCheckedPref];
+            [defaults setObject:version forKey:@"WQUpdateAvailable"];
+            BOOL newer = [version compare:mine options:NSNumericSearch] == NSOrderedDescending;
+            wq_log(@"update check: latest %@, this is %@%@", version, mine, newer ? @" (update available)" : @"");
+            if (newer) [weakSelf showUpdateBanner:version];
+        });
+    }] resume];
+}
+
+- (void)showUpdateBanner:(NSString *)version
+{
+    if ([_availableVersion isEqualToString:version] && _updateBanner) return;
+    _availableVersion = version;
+    if (_updateBanner) {
+        [_contentStack removeArrangedSubview:_updateBanner];
+        [_updateBanner removeFromSuperview];
+        _updateBanner = nil;
+    }
+    UIButtonConfiguration *cfg = [UIButtonConfiguration tintedButtonConfiguration];
+    cfg.title = WQLocalizedFormat(@"WQ Files %@ is available", version);
+    cfg.image = [UIImage systemImageNamed:@"arrow.down.circle"];
+    cfg.imagePadding = 8;
+    cfg.cornerStyle = UIButtonConfigurationCornerStyleLarge;
+    UIButton *button = [UIButton buttonWithConfiguration:cfg primaryAction:[UIAction actionWithHandler:^(UIAction *__unused a) {
+        [UIApplication.sharedApplication openURL:[NSURL URLWithString:@"https://github.com/kolbicz/WQFiles/releases/latest"] options:@{} completionHandler:nil];
+    }]];
+    button.translatesAutoresizingMaskIntoConstraints = NO;
+    [button.heightAnchor constraintEqualToConstant:46].active = YES;
+    _updateBanner = button;
+    NSUInteger index = [_contentStack.arrangedSubviews indexOfObject:_heroView];
+    if (index == NSNotFound) index = 0;
+    [_contentStack insertArrangedSubview:button atIndex:index + 1];
+}
+
+@end
+
+#pragma mark - WQ Prism settings
+
+@implementation WQPrismSettingsViewController
+
+- (instancetype)init
+{
+    if ((self = [super initWithStyle:UITableViewStyleInsetGrouped])) self.title = WQLocalizedNullable(@"Settings");
+    return self;
+}
+
+- (void)viewDidLoad
+{
+    [super viewDidLoad];
+    self.navigationItem.rightBarButtonItem = [[UIBarButtonItem alloc] initWithTitle:WQLocalizedNullable(@"Done")
+                                                                               style:UIBarButtonItemStylePlain
+                                                                              target:self
+                                                                              action:@selector(done)];
+}
+
+- (void)done
+{
+    [self dismissViewControllerAnimated:YES completion:nil];
+}
+
+- (void)viewWillAppear:(BOOL)animated
+{
+    [super viewWillAppear:animated];
+    [self.tableView reloadData];
+}
+
+- (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView { return 2; }
+
+- (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section
+{
+    return section == 0 ? 6 : 3;
+}
+
+- (NSString *)tableView:(UITableView *)tableView titleForHeaderInSection:(NSInteger)section
+{
+    return nil;
+}
+
+- (NSString *)tableView:(UITableView *)tableView titleForFooterInSection:(NSInteger)section
+{
+    if (section != 0) return nil;
+    return [NSString stringWithFormat:@"%@\n\n%@\n\n%@",
+            WQLocalized(@"Allow Deleting: when off, nothing can be deleted: no Delete or swipe to delete in folders and backups, no Clear Data in Apps and no cleaning in the Cache Cleaner. Saving, moving and restoring still work.\n\nShow Item Counts: shows how many items each folder holds. Every subfolder has to be listed for this, which slows down folders with many subfolders, especially in other apps' data."),
+            WQLocalized(@"Keep Data Before Restore: restoring an app or file backup first backs up what's there now, so a failed restore can be undone. When off, that backup is deleted once the restore succeeded."),
+            WQLocalized(@"Reopen Last Folder: WQ Files starts in the folder you were in. Check for Updates: twice a day WQ Files reads the public release list on GitHub and shows a note when a new version is out; nothing about your device is sent.")];
+}
+
+- (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath
+{
+    UITableViewCell *cell = [tableView dequeueReusableCellWithIdentifier:@"prism-settings"]
+        ?: [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleSubtitle reuseIdentifier:@"prism-settings"];
+    cell.accessoryView = nil;
+    cell.selectionStyle = UITableViewCellSelectionStyleDefault;
+    UIListContentConfiguration *c = [UIListContentConfiguration subtitleCellConfiguration];
+    NSUserDefaults *defaults = NSUserDefaults.standardUserDefaults;
+    if (indexPath.section == 0) {
+        NSArray<NSString *> *titles = @[@"Allow Deleting", @"Show Item Counts", @"Keep Data Before Restore", @"Reopen Last Folder", @"Check for Updates", @"New Design"];
+        NSArray<NSString *> *symbols = @[@"trash.slash", @"number", @"clock.arrow.circlepath", @"arrow.uturn.forward", @"arrow.down.circle", @"paintbrush"];
+        c.text = WQLocalizedNullable(titles[(NSUInteger)indexPath.row]);
+        c.image = [UIImage systemImageNamed:symbols[(NSUInteger)indexPath.row]];
+        UISwitch *toggle = [UISwitch new];
+        toggle.on = indexPath.row == 1 ? wq_show_item_counts()
+                   : indexPath.row == 2 ? wq_keep_before_restore()
+                   : indexPath.row == 3 ? ![defaults boolForKey:kWQReopenOffPref]
+                   : indexPath.row == 4 ? ![defaults boolForKey:kWQUpdateCheckOffPref]
+                   : indexPath.row == 5 ? wq_prism_enabled()
+                   : wq_deleting_allowed();
+        [toggle addAction:[UIAction actionWithHandler:^(UIAction *action) {
+            BOOL on = ((UISwitch *)action.sender).isOn;
+            if (indexPath.row == 1) [defaults setBool:on forKey:kWQShowItemCountsPref];
+            else if (indexPath.row == 2) wq_set_keep_before_restore(on);
+            else if (indexPath.row == 3) {
+                [defaults setBool:!on forKey:kWQReopenOffPref];
+                if (!on) [defaults removeObjectForKey:kWQLastFolderPref];
+            } else if (indexPath.row == 4) [defaults setBool:!on forKey:kWQUpdateCheckOffPref];
+            else if (indexPath.row == 5) {
+                // Settings is a sheet over the tabs: close it, then swap the screens.
+                wq_set_prism_enabled(on);
+                [self dismissViewControllerAnimated:YES completion:^{ wq_apply_design(); }];
+            }
+            else wq_set_deleting_allowed(on);
+        }] forControlEvents:UIControlEventValueChanged];
+        cell.contentConfiguration = c;
+        cell.accessoryView = toggle;
+        cell.selectionStyle = UITableViewCellSelectionStyleNone;
+        return cell;
+    }
+    NSArray<NSString *> *titles = @[@"Language", @"Log", @"About"];
+    NSArray<NSString *> *symbols = @[@"globe", @"doc.plaintext", @"info.circle"];
+    c.text = WQLocalizedNullable(titles[(NSUInteger)indexPath.row]);
+    c.image = [UIImage systemImageNamed:symbols[(NSUInteger)indexPath.row]];
+    if (indexPath.row == 0) c.secondaryText = wq_language_name(wq_chosen_language());
+    if (indexPath.row == 1) c.secondaryText = nil;
+    if (indexPath.row == 2) c.secondaryText = wq_app_version_line();
+    cell.contentConfiguration = c;
+    cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
+    return cell;
+}
+
+- (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath
+{
+    [tableView deselectRowAtIndexPath:indexPath animated:YES];
+    if (indexPath.section == 0) return;
+    if (indexPath.row == 0) {
+        [self.navigationController pushViewController:[WQLanguageViewController new] animated:YES];
+    } else if (indexPath.row == 1) {
+        [self.navigationController pushViewController:[WQLogViewController new] animated:YES];
+    } else {
+        NSString *version = [NSString stringWithFormat:@"%@\n\n%@", wq_app_version_line(), WQLocalizedNullable(@"Sandbox escape: worse_query by @forcequitOS")];
+        UIAlertController *alert = wq_alert_controller(@"WQ Files", version, UIAlertControllerStyleAlert);
+        [alert addAction:wq_alert_action(@"GitHub", UIAlertActionStyleDefault, ^(UIAlertAction *__unused a) {
+            [UIApplication.sharedApplication openURL:[NSURL URLWithString:@"https://github.com/kolbicz/WQFiles"] options:@{} completionHandler:nil];
+        })];
+        [alert addAction:wq_alert_action(@"OK", UIAlertActionStyleCancel, nil)];
+        [self presentViewController:alert animated:YES completion:nil];
+    }
+}
+
+@end
+
+#pragma mark - WQ Prism vault
+
+@implementation WQPrismVaultViewController
+
+- (instancetype)init
+{
+    if ((self = [super initWithStyle:UITableViewStyleInsetGrouped])) self.title = WQLocalizedNullable(@"Backups");
+    return self;
+}
+
+- (void)viewDidLoad
+{
+    [super viewDidLoad];
+    wq_prism_install_background(self);
+    self.tableView.backgroundColor = [UIColor clearColor];
+    self.tableView.contentInset = UIEdgeInsetsMake(0, 0, 90, 0);
+}
+
+- (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView { return 1; }
+
+- (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section
+{
+    return 3;
+}
+
+- (NSString *)tableView:(UITableView *)tableView titleForFooterInSection:(NSInteger)section
+{
+    return section == 0 ? WQLocalized(@"Overwritten and deleted files are copied to Backups first (also visible in the Files app). Long-press a backup to restore it.") : nil;
+}
+
+- (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath
+{
+    UITableViewCell *cell = [tableView dequeueReusableCellWithIdentifier:@"prism-vault"]
+        ?: [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleSubtitle reuseIdentifier:@"prism-vault"];
+    UIListContentConfiguration *c = [UIListContentConfiguration subtitleCellConfiguration];
+    NSArray<NSString *> *titles = @[@"App Backups", @"File Backups", @"Recently Deleted"];
+    NSArray<NSString *> *symbols = @[@"clock.arrow.circlepath", @"archivebox", @"trash.circle"];
+    c.text = WQLocalizedNullable(titles[(NSUInteger)indexPath.row]);
+    c.image = [UIImage systemImageNamed:symbols[(NSUInteger)indexPath.row]];
+    cell.contentConfiguration = c;
+    cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
+    cell.backgroundColor = [UIColor clearColor];
+    return cell;
+}
+
+- (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath
+{
+    [tableView deselectRowAtIndexPath:indexPath animated:YES];
+    if (indexPath.row == 0) {
+        [NSFileManager.defaultManager createDirectoryAtPath:wq_app_backup_root() withIntermediateDirectories:YES attributes:nil error:nil];
+        UIViewController *next = [[WQDirViewController alloc] initWithPath:wq_app_backup_root() title:WQLocalizedNullable(@"App Backups")];
+        [self.navigationController pushViewController:next animated:YES];
+    } else if (indexPath.row == 1) {
+        [NSFileManager.defaultManager createDirectoryAtPath:wq_backup_root() withIntermediateDirectories:YES attributes:nil error:nil];
+        UIViewController *next = [[WQDirViewController alloc] initWithPath:wq_backup_root() title:WQLocalizedNullable(@"File Backups")];
+        [self.navigationController pushViewController:next animated:YES];
+    } else {
+        [self.navigationController pushViewController:[WQRecentlyDeletedViewController new] animated:YES];
+    }
+}
+
+@end
+
+#pragma mark - WQ Prism tabs
+
+@interface WQPrismTabController : UITabBarController
+@end
+
+@implementation WQPrismTabController
+
+- (void)viewDidLoad
+{
+    [super viewDidLoad];
+    WQPrismHomeViewController *home = [WQPrismHomeViewController new];
+    WQAppsViewController *apps = [WQAppsViewController new];
+    WQCacheCleanerViewController *clean = [WQCacheCleanerViewController new];
+    WQPrismVaultViewController *vault = [WQPrismVaultViewController new];
+
+    WQNavigationController *homeNav = [[WQNavigationController alloc] initWithRootViewController:home];
+    WQNavigationController *appsNav = [[WQNavigationController alloc] initWithRootViewController:apps];
+    WQNavigationController *cleanNav = [[WQNavigationController alloc] initWithRootViewController:clean];
+    WQNavigationController *vaultNav = [[WQNavigationController alloc] initWithRootViewController:vault];
+
+    homeNav.tabBarItem = [[UITabBarItem alloc] initWithTitle:WQLocalizedNullable(@"Home")
+        image:[UIImage systemImageNamed:@"house.fill"] tag:0];
+    appsNav.tabBarItem = [[UITabBarItem alloc] initWithTitle:WQLocalizedNullable(@"Apps")
+        image:[UIImage systemImageNamed:@"square.grid.3x3.fill"] tag:1];
+    cleanNav.tabBarItem = [[UITabBarItem alloc] initWithTitle:WQLocalizedNullable(@"Clean")
+        image:[UIImage systemImageNamed:@"sparkles"] tag:2];
+    vaultNav.tabBarItem = [[UITabBarItem alloc] initWithTitle:WQLocalizedNullable(@"Backups")
+        image:[UIImage systemImageNamed:@"clock.arrow.circlepath"] tag:3];
+
+    self.viewControllers = @[homeNav, appsNav, cleanNav, vaultNav];
+    self.selectedIndex = 0;
+    self.tabBar.tintColor = [UIColor colorWithRed:0.37 green:0.50 blue:1.0 alpha:1.0];
+}
+
+- (void)viewDidAppear:(BOOL)animated
+{
+    [super viewDidAppear:animated];
+    if (self.viewControllers.count > 2) {
+        WQNavigationController *cleanNav = self.viewControllers[2];
+        cleanNav.tabBarItem.title = WQLocalizedNullable(@"Clean");
+    }
+}
+
+@end
+
+#pragma mark - Classic start screen
+
+// The design from before WQ Prism, kept as a choice in Settings (New Design off).
+@interface WQRootViewController : UITableViewController
+@end
+
 @implementation WQRootViewController {
     NSArray<NSArray<NSString *> *> *_locations;  // title, path, symbol
     // Kept between visits so Apps and the Cache Cleaner show their last list
@@ -3937,14 +5403,13 @@ static UIImage *wq_language_flag(NSString *code)
 {
     [super viewDidAppear:animated];
     [self presentPendingHealthFailure];
-    static BOOL checked;
-    if (checked) {
+    if (wq_startup_checked) {
         // Back on the start screen: nothing to reopen next time.
         _reopenFolder = nil;
         [NSUserDefaults.standardUserDefaults removeObjectForKey:kWQLastFolderPref];
         return;
     }
-    checked = YES;
+    wq_startup_checked = YES;
     NSDictionary *last = [NSUserDefaults.standardUserDefaults dictionaryForKey:kWQLastFolderPref];
     if (![NSUserDefaults.standardUserDefaults boolForKey:kWQReopenOffPref] && [last[@"path"] isKindOfClass:NSString.class])
         _reopenFolder = last;
@@ -4178,7 +5643,7 @@ static UIImage *wq_language_flag(NSString *code)
 - (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section
 {
     // System Groups is the extra last row, on iOS 27 only.
-    if (section == 2) return 6;
+    if (section == 2) return 7;
     return section == 0 ? (NSInteger)_locations.count + (wq_system_areas_reachable() ? 1 : 0) : 8;
 }
 
@@ -4220,14 +5685,15 @@ static UIImage *wq_language_flag(NSString *code)
     if (indexPath.section == 2) {
         cell.accessoryType = UITableViewCellAccessoryNone;
         NSInteger row = indexPath.row;
-        // Rows 0-2 and 4-5 are switches; row 3 is Language (above).
+        // Rows 0-2 and 4-6 are switches; row 3 is Language (above).
         NSUInteger index = (NSUInteger)(row > 3 ? row - 1 : row);
-        c.text = WQLocalized(@[@"Allow Deleting", @"Show Item Counts", @"Keep Data Before Restore", @"Reopen Last Folder", @"Check for Updates"][index]);
-        c.image = [UIImage systemImageNamed:@[@"trash.slash", @"number", @"clock.arrow.circlepath", @"arrow.uturn.forward", @"arrow.down.circle"][index]];
+        c.text = WQLocalized(@[@"Allow Deleting", @"Show Item Counts", @"Keep Data Before Restore", @"Reopen Last Folder", @"Check for Updates", @"New Design"][index]);
+        c.image = [UIImage systemImageNamed:@[@"trash.slash", @"number", @"clock.arrow.circlepath", @"arrow.uturn.forward", @"arrow.down.circle", @"paintbrush"][index]];
         NSUserDefaults *defaults = NSUserDefaults.standardUserDefaults;
         UISwitch *toggle = [UISwitch new];
         toggle.on = row == 1 ? wq_show_item_counts() : row == 2 ? wq_keep_before_restore()
                   : row == 4 ? ![defaults boolForKey:kWQReopenOffPref] : row == 5 ? ![defaults boolForKey:kWQUpdateCheckOffPref]
+                  : row == 6 ? wq_prism_enabled()
                   : wq_deleting_allowed();
         [toggle addAction:[UIAction actionWithHandler:^(UIAction *action) {
             BOOL on = ((UISwitch *)action.sender).isOn;
@@ -4235,6 +5701,7 @@ static UIImage *wq_language_flag(NSString *code)
             else if (row == 2) wq_set_keep_before_restore(on);
             else if (row == 4) { [defaults setBool:!on forKey:kWQReopenOffPref]; if (!on) [defaults removeObjectForKey:kWQLastFolderPref]; }
             else if (row == 5) [defaults setBool:!on forKey:kWQUpdateCheckOffPref];
+            else if (row == 6) { wq_set_prism_enabled(on); wq_apply_design(); }
             else wq_set_deleting_allowed(on);
         }] forControlEvents:UIControlEventValueChanged];
         cell.contentConfiguration = c;
@@ -4275,7 +5742,7 @@ static UIImage *wq_language_flag(NSString *code)
     if (indexPath.section == 0) {
         if ((NSUInteger)indexPath.row < _locations.count) {
             NSArray *loc = _locations[(NSUInteger)indexPath.row];
-            next = [[WQDirViewController alloc] initWithPath:loc[1] title:loc[0]];
+            next = [[WQDirViewController alloc] initWithPath:loc[1] title:WQLocalizedNullable(loc[0])];
         } else {
             next = [WQSystemGroupsViewController new];
         }
@@ -4345,7 +5812,7 @@ static UIImage *wq_language_flag(NSString *code)
 #pragma mark - Startup check
 
 // The startup check runs in the background while the start screen is up
-// (WQRootViewController). When something essential fails, this screen covers
+// (WQPrismHomeViewController). When something essential fails, this screen covers
 // the app with what failed; it only goes away through Try Again (when the
 // check then passes) or Continue Anyway. (Declared before the start screen.)
 
@@ -4512,6 +5979,12 @@ static UIImage *wq_language_flag(NSString *code)
 
 #pragma mark - App
 
+static UIViewController *wq_make_root_view_controller(void)
+{
+    if (wq_prism_enabled()) return [WQPrismTabController new];
+    return [[WQNavigationController alloc] initWithRootViewController:[WQRootViewController new]];
+}
+
 @interface WQSceneDelegate : UIResponder <UIWindowSceneDelegate>
 @property (nonatomic, strong) UIWindow *window;
 @end
@@ -4521,12 +5994,30 @@ static UIImage *wq_language_flag(NSString *code)
 - (void)scene:(UIScene *)scene willConnectToSession:(UISceneSession *)session options:(UISceneConnectionOptions *)options
 {
     UIWindow *window = [[UIWindow alloc] initWithWindowScene:(UIWindowScene *)scene];
-    window.rootViewController = [[WQNavigationController alloc] initWithRootViewController:[WQRootViewController new]];
+    window.rootViewController = wq_make_root_view_controller();
     [window makeKeyAndVisible];
     self.window = window;
 }
 
 @end
+
+// New Design switched in Settings: every window gets the other start screen.
+static void wq_apply_design(void)
+{
+    for (UIScene *scene in UIApplication.sharedApplication.connectedScenes) {
+        if (![scene.delegate isKindOfClass:WQSceneDelegate.class]) continue;
+        UIWindow *window = ((WQSceneDelegate *)scene.delegate).window;
+        if (!window) continue;
+        if (window.rootViewController.presentedViewController)
+            [window.rootViewController dismissViewControllerAnimated:NO completion:nil];
+        [UIView transitionWithView:window duration:0.3 options:UIViewAnimationOptionTransitionCrossDissolve animations:^{
+            BOOL enabled = UIView.areAnimationsEnabled;
+            [UIView setAnimationsEnabled:NO];
+            window.rootViewController = wq_make_root_view_controller();
+            [UIView setAnimationsEnabled:enabled];
+        } completion:nil];
+    }
+}
 
 #pragma mark - Full scan: confirmation and progress window
 

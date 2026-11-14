@@ -51,7 +51,7 @@ UIView *wq_device_header(CGFloat width)
     header.textAlignment = NSTextAlignmentCenter;
     header.font = [UIFont monospacedSystemFontOfSize:11 weight:UIFontWeightMedium];
     header.textColor = UIColor.secondaryLabelColor;
-    header.backgroundColor = UIColor.secondarySystemBackgroundColor;
+    header.backgroundColor = wq_prism_enabled() ? [UIColor clearColor] : UIColor.secondarySystemBackgroundColor;
     header.adjustsFontSizeToFitWidth = YES;   // keeps both lines on narrow screens
     header.minimumScaleFactor = 0.8;
     header.text = [NSString stringWithFormat:@"%@\n%@", wq_app_version_line(), wq_device_line()];
@@ -363,4 +363,112 @@ NSString *wq_size_text(unsigned long long size)
 {
     if (size == 0) return @"0 KB";
     return [NSByteCountFormatter stringFromByteCount:(long long)size countStyle:NSByteCountFormatterCountStyleFile];
+}
+
+// WQ Prism: a soft layered backdrop shared by the redesigned screens.
+@interface WQPrismBackgroundView : UIView
+@end
+
+@implementation WQPrismBackgroundView {
+    CAGradientLayer *_base;
+    NSArray<CAGradientLayer *> *_glows;
+}
+
+- (instancetype)initWithFrame:(CGRect)frame
+{
+    if ((self = [super initWithFrame:frame])) {
+        self.userInteractionEnabled = NO;
+        self.clipsToBounds = YES;
+        _base = [CAGradientLayer layer];
+        _base.startPoint = CGPointMake(0.5, 0.0);
+        _base.endPoint = CGPointMake(0.5, 1.0);
+        [self.layer addSublayer:_base];
+        NSMutableArray *glows = [NSMutableArray new];
+        for (NSInteger i = 0; i < 4; i++) {
+            CAGradientLayer *g = [CAGradientLayer layer];
+            g.type = kCAGradientLayerRadial;
+            g.startPoint = CGPointMake(0.5, 0.5);
+            g.endPoint = CGPointMake(1.0, 1.0);
+            [self.layer addSublayer:g];
+            [glows addObject:g];
+        }
+        _glows = glows;
+        [self updateColors];
+        [self registerForTraitChanges:@[UITraitUserInterfaceStyle.class] withAction:@selector(updateColors)];
+    }
+    return self;
+}
+
+- (void)updateColors
+{
+    BOOL dark = self.traitCollection.userInterfaceStyle != UIUserInterfaceStyleLight;
+    if (dark) {
+        _base.colors = @[(id)[UIColor colorWithRed:0.024 green:0.033 blue:0.062 alpha:1].CGColor,
+                         (id)[UIColor colorWithRed:0.043 green:0.063 blue:0.125 alpha:1].CGColor];
+        _glows[0].colors = @[(id)[UIColor colorWithRed:0.30 green:0.42 blue:0.95 alpha:0.62].CGColor, (id)[UIColor clearColor].CGColor];
+        _glows[1].colors = @[(id)[UIColor colorWithRed:0.55 green:0.36 blue:0.95 alpha:0.48].CGColor, (id)[UIColor clearColor].CGColor];
+        _glows[2].colors = @[(id)[UIColor colorWithRed:0.12 green:0.76 blue:0.66 alpha:0.32].CGColor, (id)[UIColor clearColor].CGColor];
+        _glows[3].colors = @[(id)[UIColor colorWithRed:0.95 green:0.34 blue:0.60 alpha:0.22].CGColor, (id)[UIColor clearColor].CGColor];
+    } else {
+        _base.colors = @[(id)[UIColor colorWithRed:0.92 green:0.95 blue:1.0 alpha:1].CGColor,
+                         (id)[UIColor colorWithRed:0.86 green:0.91 blue:1.0 alpha:1].CGColor];
+        _glows[0].colors = @[(id)[UIColor colorWithRed:0.56 green:0.69 blue:1.0 alpha:0.48].CGColor, (id)[UIColor clearColor].CGColor];
+        _glows[1].colors = @[(id)[UIColor colorWithRed:0.78 green:0.65 blue:1.0 alpha:0.38].CGColor, (id)[UIColor clearColor].CGColor];
+        _glows[2].colors = @[(id)[UIColor colorWithRed:0.52 green:0.92 blue:0.84 alpha:0.30].CGColor, (id)[UIColor clearColor].CGColor];
+        _glows[3].colors = @[(id)[UIColor colorWithRed:1.0 green:0.72 blue:0.84 alpha:0.24].CGColor, (id)[UIColor clearColor].CGColor];
+    }
+}
+
+- (void)layoutSubviews
+{
+    [super layoutSubviews];
+    _base.frame = self.bounds;
+    CGFloat w = self.bounds.size.width, h = self.bounds.size.height;
+    _glows[0].frame = CGRectMake(-w * 0.34, -h * 0.08, w * 0.92, w * 0.92);
+    _glows[1].frame = CGRectMake(w * 0.42, -h * 0.10, w * 0.82, w * 0.82);
+    _glows[2].frame = CGRectMake(w * 0.26, h * 0.56, w * 0.94, w * 0.94);
+    _glows[3].frame = CGRectMake(-w * 0.30, h * 0.70, w * 0.72, w * 0.72);
+}
+
+@end
+
+UIView *wq_prism_background_view(void)
+{
+    return [[WQPrismBackgroundView alloc] initWithFrame:CGRectZero];
+}
+
+void wq_prism_install_background(UIViewController *vc)
+{
+    if (!wq_prism_enabled() || !vc.isViewLoaded) return;
+    if ([vc.view viewWithTag:0x57515042]) return;
+    if ([vc.view isKindOfClass:UITableView.class]) {
+        UITableView *table = (UITableView *)vc.view;
+        table.backgroundColor = [UIColor clearColor];
+        table.backgroundView = wq_prism_background_view();
+        return;
+    }
+    UIView *bg = wq_prism_background_view();
+    bg.tag = 0x57515042;
+    bg.translatesAutoresizingMaskIntoConstraints = NO;
+    [vc.view insertSubview:bg atIndex:0];
+    [NSLayoutConstraint activateConstraints:@[
+        [bg.topAnchor constraintEqualToAnchor:vc.view.topAnchor],
+        [bg.bottomAnchor constraintEqualToAnchor:vc.view.bottomAnchor],
+        [bg.leadingAnchor constraintEqualToAnchor:vc.view.leadingAnchor],
+        [bg.trailingAnchor constraintEqualToAnchor:vc.view.trailingAnchor],
+    ]];
+    vc.view.backgroundColor = [UIColor clearColor];
+}
+
+
+static NSString *const kWQClassicDesignPref = @"WQClassicDesign";
+
+BOOL wq_prism_enabled(void)
+{
+    return ![NSUserDefaults.standardUserDefaults boolForKey:kWQClassicDesignPref];
+}
+
+void wq_set_prism_enabled(BOOL enabled)
+{
+    [NSUserDefaults.standardUserDefaults setBool:!enabled forKey:kWQClassicDesignPref];
 }

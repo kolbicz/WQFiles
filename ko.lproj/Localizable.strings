@@ -951,3 +951,14 @@
 "WQ Files has no access to the app's data right now (%@). Nothing was backed up; try again." = "WQ Files가 지금 앱 데이터에 접근할 수 없습니다(%@). 아무것도 백업되지 않았습니다. 다시 시도하십시오.";
 "The app's data folder holds neither Documents nor Library, so there is nothing to back up." = "앱의 데이터 폴더에 Documents와 Library가 모두 없으므로 백업할 항목이 없습니다.";
 "This backup is empty (it was made while WQ Files had no access to the app). Restoring it would delete the app's data, so nothing was changed." = "이 백업은 비어 있습니다(WQ Files가 앱에 접근할 수 없을 때 만들어짐). 복원하면 앱 데이터가 삭제되므로 아무것도 변경하지 않았습니다.";
+"Quick Check" = "Quick Check";
+"All your containers, in one place." = "All your containers, in one place.";
+"System" = "System";
+"Tap a container to browse it. Long-press for actions." = "Tap a container to browse it. Long-press for actions.";
+"Backups are checked before every restore." = "Backups are checked before every restore.";
+"Access check passed." = "Access check passed.";
+"Access check failed." = "Access check failed.";
+"Info" = "Info";
+"More" = "More";
+"About" = "About";
+"New Design" = "새 디자인";

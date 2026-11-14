@@ -392,6 +392,11 @@ static BOOL WQCacheValidateItem(WQCacheItem *item, NSString **reason)
 {
     [super viewDidLoad];
     self.title = WQLocalizedNullable(@"Cache Cleaner");
+    self.tabBarItem.title = WQLocalizedNullable(@"Clean");
+    if (wq_prism_enabled()) {
+        wq_prism_install_background(self);
+        self.tableView.backgroundColor = [UIColor clearColor];
+    }
     self.tableView.tableHeaderView = wq_device_header(self.view.bounds.size.width);
     UISearchController *search = [[UISearchController alloc] initWithSearchResultsController:nil];
     search.searchResultsUpdater = self;
