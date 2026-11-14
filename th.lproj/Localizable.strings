@@ -962,3 +962,7 @@
 "More" = "เพิ่มเติม";
 "About" = "เกี่ยวกับ";
 "New Design" = "ดีไซน์ใหม่";
+"Troubleshooting" = "การแก้ไขปัญหา";
+"Reset Access Cache: use it when folders stay empty or the startup check says sandbox access failed. It repairs WQ Files' own cache folder in its App Group; nothing is deleted." = "รีเซ็ตแคชการเข้าถึง: ใช้เมื่อโฟลเดอร์ยังว่างอยู่ หรือการตรวจสอบตอนเริ่มแจ้งว่าการเข้าถึงแซนด์บ็อกซ์ล้มเหลว ระบบจะซ่อมโฟลเดอร์แคชของ WQ Files เองใน App Group โดยไม่มีการลบสิ่งใด";
+"Access Cache Reset" = "รีเซ็ตแคชการเข้าถึงแล้ว";
+"The access cache was repaired. If folders still stay empty, send the Log." = "ซ่อมแคชการเข้าถึงแล้ว หากโฟลเดอร์ยังว่างอยู่ โปรดส่งบันทึก";

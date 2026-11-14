@@ -958,3 +958,7 @@
 "More" = "المزيد";
 "About" = "حول";
 "New Design" = "التصميم الجديد";
+"Troubleshooting" = "استكشاف الأخطاء وإصلاحها";
+"Reset Access Cache: use it when folders stay empty or the startup check says sandbox access failed. It repairs WQ Files' own cache folder in its App Group; nothing is deleted." = "إعادة تعيين ذاكرة الوصول المؤقتة: استخدمها عندما تبقى المجلدات فارغة أو يُظهر فحص بدء التشغيل أن الوصول إلى الصندوق الرملي فشل. تُصلح مجلد ذاكرة التخزين المؤقت الخاص بـ WQ Files في مجموعة التطبيقات الخاصة به؛ ولا يُحذف أي شيء.";
+"Access Cache Reset" = "تمت إعادة تعيين ذاكرة الوصول المؤقتة";
+"The access cache was repaired. If folders still stay empty, send the Log." = "تم إصلاح ذاكرة الوصول المؤقتة. إذا بقيت المجلدات فارغة، فأرسل السجل.";

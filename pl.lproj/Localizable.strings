@@ -962,3 +962,7 @@
 "More" = "Więcej";
 "About" = "Informacje";
 "New Design" = "Nowy wygląd";
+"Troubleshooting" = "Rozwiązywanie problemów";
+"Reset Access Cache: use it when folders stay empty or the startup check says sandbox access failed. It repairs WQ Files' own cache folder in its App Group; nothing is deleted." = "Resetuj pamięć dostępu: użyj, gdy foldery pozostają puste lub sprawdzenie przy starcie zgłasza, że dostęp do piaskownicy się nie powiódł. Naprawia własny folder pamięci podręcznej WQ Files w jego App Group; nic nie jest usuwane.";
+"Access Cache Reset" = "Pamięć dostępu zresetowana";
+"The access cache was repaired. If folders still stay empty, send the Log." = "Pamięć dostępu została naprawiona. Jeśli foldery nadal są puste, wyślij Log.";

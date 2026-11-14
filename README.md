@@ -186,6 +186,16 @@ and only change what you understand.
   leave it partly usable (app names, an untested iOS version) are shown once as
   a warning. The result is in **Log** as `health: …`.
 
+- **Every folder refused (`token cache recovery failed`)**: WQ Files briefly
+  swaps its own `Library/Caches` folder in the App Group to get each access
+  token. If a swap was interrupted, or another app sharing the App Group
+  changed that folder, it refuses every token instead of risking the
+  contents. The Log line says what it found (swap marker, preserved Caches,
+  what Caches is now). **Settings → Troubleshooting → Reset Access Cache**
+  (also on the startup check screen) puts the folder back; nothing is deleted.
+  If it keeps coming back, another app signed with the same App Group is
+  changing it.
+
 - **Apps list is empty**: the Apps screen depends on a full `fsgetpath` scan of
   the data volume. A missing/denied container parent, an unavailable inode
   probe, or an exhausted scan bound is logged as `enumerate: …` and

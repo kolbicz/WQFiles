@@ -962,3 +962,7 @@
 "More" = "更多";
 "About" = "关于";
 "New Design" = "新设计";
+"Troubleshooting" = "故障排除";
+"Reset Access Cache: use it when folders stay empty or the startup check says sandbox access failed. It repairs WQ Files' own cache folder in its App Group; nothing is deleted." = "重置访问缓存：当文件夹一直为空，或启动检查显示沙盒访问失败时使用。它会修复 WQ Files 在其 App Group 中自己的缓存文件夹；不会删除任何内容。";
+"Access Cache Reset" = "访问缓存已重置";
+"The access cache was repaired. If folders still stay empty, send the Log." = "访问缓存已修复。如果文件夹仍然为空，请发送日志。";

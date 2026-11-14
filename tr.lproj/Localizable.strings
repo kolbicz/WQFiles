@@ -962,3 +962,7 @@
 "More" = "Daha Fazla";
 "About" = "Hakkında";
 "New Design" = "Yeni Tasarım";
+"Troubleshooting" = "Sorun Giderme";
+"Reset Access Cache: use it when folders stay empty or the startup check says sandbox access failed. It repairs WQ Files' own cache folder in its App Group; nothing is deleted." = "Erişim Önbelleğini Sıfırla: Klasörler boş kalıyorsa veya başlangıç denetimi sandbox erişiminin başarısız olduğunu söylüyorsa kullanın. WQ Files'ın App Group içindeki kendi önbellek klasörünü onarır; hiçbir şey silinmez.";
+"Access Cache Reset" = "Erişim Önbelleği Sıfırlandı";
+"The access cache was repaired. If folders still stay empty, send the Log." = "Erişim önbelleği onarıldı. Klasörler hâlâ boş kalıyorsa Günlüğü gönderin.";

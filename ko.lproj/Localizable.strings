@@ -962,3 +962,7 @@
 "More" = "더 보기";
 "About" = "정보";
 "New Design" = "새 디자인";
+"Troubleshooting" = "문제 해결";
+"Reset Access Cache: use it when folders stay empty or the startup check says sandbox access failed. It repairs WQ Files' own cache folder in its App Group; nothing is deleted." = "접근 캐시 재설정: 폴더가 계속 비어 있거나 시작 검사에서 샌드박스 접근 실패가 표시될 때 사용하세요. App Group에 있는 WQ Files 자체 캐시 폴더를 복구하며, 아무것도 삭제되지 않습니다.";
+"Access Cache Reset" = "접근 캐시 재설정됨";
+"The access cache was repaired. If folders still stay empty, send the Log." = "접근 캐시를 복구했습니다. 폴더가 여전히 비어 있으면 로그를 보내 주세요.";

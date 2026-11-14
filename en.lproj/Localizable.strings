@@ -962,3 +962,7 @@
 "More" = "More";
 "About" = "About";
 "New Design" = "New Design";
+"Troubleshooting" = "Troubleshooting";
+"Reset Access Cache: use it when folders stay empty or the startup check says sandbox access failed. It repairs WQ Files' own cache folder in its App Group; nothing is deleted." = "Reset Access Cache: use it when folders stay empty or the startup check says sandbox access failed. It repairs WQ Files' own cache folder in its App Group; nothing is deleted.";
+"Access Cache Reset" = "Access Cache Reset";
+"The access cache was repaired. If folders still stay empty, send the Log." = "The access cache was repaired. If folders still stay empty, send the Log.";

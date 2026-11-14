@@ -5083,6 +5083,33 @@ static void wq_apply_design(void);
 
 @end
 
+#pragma mark - Reset Access Cache
+
+// Shared by Settings (both designs) and the startup check screen. `done` runs
+// after a successful reset (the startup check retries; Settings tells the user).
+static void wq_confirm_reset_access_cache(UIViewController *host, void (^done)(void))
+{
+    UIAlertController *alert = wq_alert_controller(@"Reset Access Cache?",
+        @"Another app that shares WQ Files' App Group (for example one signed with the same tool) can leave its cache folder in a state that blocks sandbox access. This puts it back; nothing is deleted.",
+        UIAlertControllerStyleAlert);
+    [alert addAction:wq_alert_action(@"Cancel", UIAlertActionStyleCancel, nil)];
+    __weak UIViewController *weakHost = host;
+    [alert addAction:wq_alert_action(@"Reset", UIAlertActionStyleDefault, ^(UIAlertAction *__unused a) {
+        NSString *error = nil;
+        UIViewController *h = weakHost;
+        if (wq_reset_access_cache(&error)) {
+            if (done) done();
+            else if (h) wq_alert(h, @"Access Cache Reset", @"The access cache was repaired. If folders still stay empty, send the Log.");
+            return;
+        }
+        if (h) wq_alert(h, @"Reset failed", error ?: @"see Log");
+    })];
+    [host presentViewController:alert animated:YES completion:nil];
+}
+
+static NSString *const kWQTroubleshootingFooter =
+    @"Reset Access Cache: use it when folders stay empty or the startup check says sandbox access failed. It repairs WQ Files' own cache folder in its App Group; nothing is deleted.";
+
 #pragma mark - WQ Prism settings
 
 @implementation WQPrismSettingsViewController
@@ -5113,20 +5140,21 @@ static void wq_apply_design(void);
     [self.tableView reloadData];
 }
 
-- (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView { return 2; }
+- (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView { return 3; }
 
 - (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section
 {
-    return section == 0 ? 6 : 3;
+    return section == 0 ? 6 : section == 1 ? 3 : 1;
 }
 
 - (NSString *)tableView:(UITableView *)tableView titleForHeaderInSection:(NSInteger)section
 {
-    return nil;
+    return section == 2 ? WQLocalized(@"Troubleshooting") : nil;
 }
 
 - (NSString *)tableView:(UITableView *)tableView titleForFooterInSection:(NSInteger)section
 {
+    if (section == 2) return WQLocalized(kWQTroubleshootingFooter);
     if (section != 0) return nil;
     return [NSString stringWithFormat:@"%@\n\n%@\n\n%@",
             WQLocalized(@"Allow Deleting: when off, nothing can be deleted: no Delete or swipe to delete in folders and backups, no Clear Data in Apps and no cleaning in the Cache Cleaner. Saving, moving and restoring still work.\n\nShow Item Counts: shows how many items each folder holds. Every subfolder has to be listed for this, which slows down folders with many subfolders, especially in other apps' data."),
@@ -5174,6 +5202,13 @@ static void wq_apply_design(void);
         cell.selectionStyle = UITableViewCellSelectionStyleNone;
         return cell;
     }
+    if (indexPath.section == 2) {
+        c.text = WQLocalizedNullable(@"Reset Access Cache");
+        c.image = [UIImage systemImageNamed:@"arrow.counterclockwise.circle"];
+        cell.contentConfiguration = c;
+        cell.accessoryType = UITableViewCellAccessoryNone;
+        return cell;
+    }
     NSArray<NSString *> *titles = @[@"Language", @"Log", @"About"];
     NSArray<NSString *> *symbols = @[@"globe", @"doc.plaintext", @"info.circle"];
     c.text = WQLocalizedNullable(titles[(NSUInteger)indexPath.row]);
@@ -5190,6 +5225,7 @@ static void wq_apply_design(void);
 {
     [tableView deselectRowAtIndexPath:indexPath animated:YES];
     if (indexPath.section == 0) return;
+    if (indexPath.section == 2) { wq_confirm_reset_access_cache(self, nil); return; }
     if (indexPath.row == 0) {
         [self.navigationController pushViewController:[WQLanguageViewController new] animated:YES];
     } else if (indexPath.row == 1) {
@@ -5638,22 +5674,25 @@ static void wq_apply_design(void);
     return footer;
 }
 
-- (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView { return 3; }
+- (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView { return 4; }
 
 - (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section
 {
     // System Groups is the extra last row, on iOS 27 only.
+    if (section == 3) return 1;
     if (section == 2) return 7;
     return section == 0 ? (NSInteger)_locations.count + (wq_system_areas_reachable() ? 1 : 0) : 8;
 }
 
 - (NSString *)tableView:(UITableView *)tableView titleForHeaderInSection:(NSInteger)section
 {
+    if (section == 3) return WQLocalized(@"Troubleshooting");
     return section == 0 ? WQLocalized(@"Containers") : section == 1 ? WQLocalized(@"Tools") : WQLocalized(@"Settings");
 }
 
 - (NSString *)tableView:(UITableView *)tableView titleForFooterInSection:(NSInteger)section
 {
+    if (section == 3) return WQLocalized(kWQTroubleshootingFooter);
     if (section == 0 && !wq_system_areas_reachable())
         return WQLocalized(@"On iOS 26, System Data and System Groups can't be reached (worse_query covers them on iOS 27 only), and Internal Daemons need a scan of every file id: the first one can take most of an hour on a well-used device, later ones only check new files.");
     if (section == 2)
@@ -5673,6 +5712,13 @@ static void wq_apply_design(void);
     UIListContentConfiguration *c = cell.defaultContentConfiguration;
     cell.accessoryView = nil;
     cell.selectionStyle = UITableViewCellSelectionStyleDefault;
+    if (indexPath.section == 3) {
+        c.text = WQLocalized(@"Reset Access Cache");
+        c.image = [UIImage systemImageNamed:@"arrow.counterclockwise.circle"];
+        cell.contentConfiguration = c;
+        cell.accessoryType = UITableViewCellAccessoryNone;
+        return cell;
+    }
     if (indexPath.section == 2 && indexPath.row == 3) {
         UIListContentConfiguration *v = [UIListContentConfiguration valueCellConfiguration];
         v.text = WQLocalized(@"Language");
@@ -5737,6 +5783,7 @@ static void wq_apply_design(void);
         [self.navigationController pushViewController:[WQLanguageViewController new] animated:YES];
         return;
     }
+    if (indexPath.section == 3) { wq_confirm_reset_access_cache(self, nil); return; }
     if (indexPath.section == 2) return;
     UIViewController *next = nil;
     if (indexPath.section == 0) {
@@ -5876,16 +5923,8 @@ static void wq_apply_design(void);
 
 - (void)resetAccessCache
 {
-    UIAlertController *alert = wq_alert_controller(@"Reset Access Cache?",
-        @"Another app that shares WQ Files' App Group (for example one signed with the same tool) can leave its cache folder in a state that blocks sandbox access. This puts it back; nothing is deleted.",
-        UIAlertControllerStyleAlert);
-    [alert addAction:wq_alert_action(@"Cancel", UIAlertActionStyleCancel, nil)];
-    [alert addAction:wq_alert_action(@"Reset", UIAlertActionStyleDefault, ^(UIAlertAction *__unused a) {
-        NSString *error = nil;
-        if (wq_reset_access_cache(&error)) { [self retry]; return; }
-        wq_alert(self, @"Reset failed", error ?: @"see Log");
-    })];
-    [self presentViewController:alert animated:YES completion:nil];
+    __weak typeof(self) weakSelf = self;
+    wq_confirm_reset_access_cache(self, ^{ [weakSelf retry]; });
 }
 
 - (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView { return _running ? 1 : 2; }

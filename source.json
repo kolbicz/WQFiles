@@ -21,6 +21,15 @@
       "category": "utilities",
       "versions": [
         {
+          "version": "0.9.8",
+          "buildVersion": "88",
+          "date": "2026-11-14",
+          "size": 817121,
+          "downloadURL": "https://github.com/kolbicz/WQFiles/releases/download/v0.9.8/WQFiles.ipa",
+          "localizedDescription": "Reset Access Cache is now in Settings → Troubleshooting (both designs). The Log explains why access is blocked and logs a repeated failure only once.",
+          "minOSVersion": "26.0"
+        },
+        {
           "version": "0.9.7",
           "buildVersion": "87",
           "date": "2026-11-14",

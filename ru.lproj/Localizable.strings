@@ -962,3 +962,7 @@
 "More" = "Ещё";
 "About" = "О программе";
 "New Design" = "Новый дизайн";
+"Troubleshooting" = "Устранение неполадок";
+"Reset Access Cache: use it when folders stay empty or the startup check says sandbox access failed. It repairs WQ Files' own cache folder in its App Group; nothing is deleted." = "Сбросить кэш доступа: используйте, если папки остаются пустыми или проверка при запуске сообщает, что доступ к песочнице не удался. Восстанавливает собственную папку кэша WQ Files в её App Group; ничего не удаляется.";
+"Access Cache Reset" = "Кэш доступа сброшен";
+"The access cache was repaired. If folders still stay empty, send the Log." = "Кэш доступа восстановлен. Если папки по-прежнему пусты, отправьте журнал.";
