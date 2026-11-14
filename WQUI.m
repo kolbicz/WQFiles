@@ -51,7 +51,7 @@ UIView *wq_device_header(CGFloat width)
     header.textAlignment = NSTextAlignmentCenter;
     header.font = [UIFont monospacedSystemFontOfSize:11 weight:UIFontWeightMedium];
     header.textColor = UIColor.secondaryLabelColor;
-    header.backgroundColor = [UIColor clearColor];
+    header.backgroundColor = wq_prism_enabled() ? [UIColor clearColor] : UIColor.secondarySystemBackgroundColor;
     header.adjustsFontSizeToFitWidth = YES;   // keeps both lines on narrow screens
     header.minimumScaleFactor = 0.8;
     header.text = [NSString stringWithFormat:@"%@\n%@", wq_app_version_line(), wq_device_line()];
@@ -439,7 +439,7 @@ UIView *wq_prism_background_view(void)
 
 void wq_prism_install_background(UIViewController *vc)
 {
-    if (!vc.isViewLoaded) return;
+    if (!wq_prism_enabled() || !vc.isViewLoaded) return;
     if ([vc.view viewWithTag:0x57515042]) return;
     if ([vc.view isKindOfClass:UITableView.class]) {
         UITableView *table = (UITableView *)vc.view;
@@ -460,3 +460,15 @@ void wq_prism_install_background(UIViewController *vc)
     vc.view.backgroundColor = [UIColor clearColor];
 }
 
+
+static NSString *const kWQClassicDesignPref = @"WQClassicDesign";
+
+BOOL wq_prism_enabled(void)
+{
+    return ![NSUserDefaults.standardUserDefaults boolForKey:kWQClassicDesignPref];
+}
+
+void wq_set_prism_enabled(BOOL enabled)
+{
+    [NSUserDefaults.standardUserDefaults setBool:!enabled forKey:kWQClassicDesignPref];
+}
