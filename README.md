@@ -273,12 +273,7 @@ The deployment minimum is iOS 26.0. Builds first run the host regression suite,
 then stage and validate the archive, metadata, signature and App Group before
 replacing `WQFiles.ipa` in the project directory. Set `WQ_SKIP_PREFLIGHT=1` for
 fixture builds that do not have a test tree. For a separate output, set
-`WQFILES_FINAL_IPA` to an absolute path in an existing directory. For a
-development build that installs straight onto profile devices (devicectl or
-Xcode), set `WQFILES_CODESIGN_IDENTITY` to a development certificate; the
-newest downloaded provisioning profile matching the bundle id and App Group is
-embedded, `get-task-allow` is added, and the bundle is signed with that
-identity (`WQFILES_PROVISION_PROFILE` picks a profile explicitly). The source
+`WQFILES_FINAL_IPA` to an absolute path in an existing directory. The source
 updater validates the IPA's embedded metadata before atomically replacing
 `source.json`; its version/build arguments must match the artifact, and an
 existing release description is preserved when no new notes are supplied.
