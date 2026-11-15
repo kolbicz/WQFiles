@@ -170,6 +170,41 @@ int main(void)
                 close(fd3);
             }
             check(!WQAbsolutePathGrammar(@"/private/var/../file") && !WQAbsolutePathGrammar(@"/private//var/file"), @"grammar rejects traversal and ambiguous empty components");
+
+            // Label heuristics (pure name matching; see wq_container_label_heuristic):
+            // saved state, SplashBoard snapshots, one Preferences plist.
+            void (^eq)(NSString *, NSString *, NSString *) = ^(NSString *got, NSString *want, NSString *name) {
+                BOOL ok = got == nil ? want == nil : [got isEqualToString:want];
+                if (!ok) {
+                    fprintf(stderr, "FAIL: %s (got %s, want %s)\n", name.UTF8String,
+                            got.UTF8String ? got.UTF8String : "(nil)", want.UTF8String ? want.UTF8String : "(nil)");
+                    exit(1);
+                }
+                printf("PASS: %s\n", name.UTF8String);
+            };
+            eq(WQLabelFromSavedStateName(@"com.example.app.savedState"), @"com.example.app", @"saved-state name gives the bundle id");
+            eq(WQLabelFromSavedStateName(@"com.example.app"), nil, @"saved-state rule needs the suffix");
+            eq(WQLabelFromSavedStateName(@".savedState"), nil, @"saved-state rule needs an id before the suffix");
+            eq(WQLabelFromSavedStateName(@"random.savedState"), nil, @"saved-state id must look like a bundle id");
+            eq(WQLabelFromSavedStateName(@"com.example..savedState"), nil, @"saved-state id may not end in a dot");
+            eq(WQLabelFromSplashBoardName(@"com.example.app - {DEFAULT GROUP}"), @"com.example.app", @"SplashBoard name gives the bundle id");
+            eq(WQLabelFromSplashBoardName(@"com.example.app - {default group}"), nil, @"SplashBoard suffix is case-sensitive");
+            eq(WQLabelFromSplashBoardName(@"com.example.app - Other"), nil, @"SplashBoard rule needs the literal suffix");
+            eq(WQLabelFromSplashBoardName(@"com.example.app- {DEFAULT GROUP}"), nil, @"SplashBoard suffix keeps its space");
+            eq(WQLabelFromSavedStateEntries(@[@"com.a.b.savedState", @"unrelated", @"com.a.b.savedState.old"]), @"com.a.b",
+               @"saved-state entries ignore other names");
+            eq(WQLabelFromSavedStateEntries(@[@"com.a.b.savedState", @"com.c.d.savedState"]), nil, @"two different saved-state ids label nothing");
+            eq(WQLabelFromSavedStateEntries(@[]), nil, @"no saved-state entries label nothing");
+            eq(WQLabelFromSplashBoardEntries(@[@"com.a.b - {DEFAULT GROUP}", @"snapshots-index"]), @"com.a.b", @"SplashBoard entries ignore other names");
+            eq(WQLabelFromSplashBoardEntries(@[@"com.a.b - {DEFAULT GROUP}", @"com.c.d - {DEFAULT GROUP}"]), nil,
+               @"two different SplashBoard ids label nothing");
+            eq(WQLabelFromPreferencesEntries(@[@"com.example.app.plist"]), @"com.example.app", @"one Preferences plist gives the bundle id");
+            eq(WQLabelFromPreferencesEntries(@[@"com.example.app.plist", @"com.example.app.plist.ibtokens"]), @"com.example.app", @"Preferences side-cars don't count");
+            eq(WQLabelFromPreferencesEntries(@[@".com.example.app.plist", @"com.example.app.plist"]), @"com.example.app", @"hidden Preferences entries don't count");
+            eq(WQLabelFromPreferencesEntries(@[@"a.plist", @"b.plist"]), nil, @"two Preferences plists label nothing");
+            eq(WQLabelFromPreferencesEntries(@[@"readme.txt"]), nil, @"no Preferences plist labels nothing");
+            eq(WQLabelFromPreferencesEntries(@[@"x.plist"]), nil, @"a Preferences plist without an id-shaped name labels nothing");
+            eq(WQLabelFromPreferencesEntries(@[@"group.com.example.shared.plist"]), @"group.com.example.shared", @"group container id from its Preferences plist");
             close(fd);
         } @finally {
             [fm removeItemAtPath:base error:nil];

@@ -2,6 +2,7 @@
 #ifndef WQ_ACCESS_SAFETY_H
 #define WQ_ACCESS_SAFETY_H
 #import <Foundation/Foundation.h>
+#import "WQAppsSupport.h"
 #include <errno.h>
 #include <fcntl.h>
 #include <stdio.h>
@@ -419,5 +420,69 @@ static inline NSComparisonResult WQBackupStampCompare(NSString *a, NSString *b)
         if (x != y) return x < y ? NSOrderedAscending : NSOrderedDescending;
     }
     return NSOrderedSame;
+}
+
+// Content heuristics for containers that no identifier source names (see
+// wq_container_label_heuristic in WQAccess.m). Pure name matching, shared with
+// the macOS fixture tests: iOS keeps a saved-state folder per app named
+// "<bundle id>.savedState", SplashBoard snapshot folders named
+// "<bundle id> - {DEFAULT GROUP}" (literal braces), and a "<bundle id>.plist"
+// in Preferences - for group containers the group id's plist. Ambiguity never
+// labels: several different candidates mean no id at all, never a guess.
+static inline NSString *WQLabelStripSuffix(NSString *name, NSString *suffix)
+{
+    if (![name hasSuffix:suffix] || name.length <= suffix.length) return nil;
+    NSString *id = [name substringToIndex:name.length - suffix.length];
+    return WQAppsSupportBundleIDValid(id) ? id : nil;
+}
+
+static inline NSString *WQLabelFromSavedStateName(NSString *name)
+{
+    return WQLabelStripSuffix(name, @".savedState");
+}
+
+static inline NSString *WQLabelFromSplashBoardName(NSString *name)
+{
+    return WQLabelStripSuffix(name, @" - {DEFAULT GROUP}");
+}
+
+static inline NSString *WQLabelFromPreferencesPlistName(NSString *name)
+{
+    return WQLabelStripSuffix(name, @".plist");
+}
+
+// One distinct id from the entry names of a folder, or nil (none, several).
+static inline NSString *WQLabelFromCandidateEntries(NSArray<NSString *> *names,
+                                                    NSString *(^labelOf)(NSString *))
+{
+    NSMutableSet<NSString *> *found = [NSMutableSet set];
+    for (NSString *name in names) {
+        NSString *id = labelOf(name);
+        if (id) [found addObject:id];
+    }
+    return found.count == 1 ? [found anyObject] : nil;
+}
+
+static inline NSString *WQLabelFromSavedStateEntries(NSArray<NSString *> *names)
+{
+    return WQLabelFromCandidateEntries(names, ^NSString *(NSString *name) { return WQLabelFromSavedStateName(name); });
+}
+
+static inline NSString *WQLabelFromSplashBoardEntries(NSArray<NSString *> *names)
+{
+    return WQLabelFromCandidateEntries(names, ^NSString *(NSString *name) { return WQLabelFromSplashBoardName(name); });
+}
+
+// If and only if exactly one plist (hidden files and side-cars don't count),
+// named "<bundle id>.plist". Two or more plists: no id.
+static inline NSString *WQLabelFromPreferencesEntries(NSArray<NSString *> *names)
+{
+    NSString *only = nil;
+    for (NSString *name in names) {
+        if (![name hasSuffix:@".plist"] || [name hasPrefix:@"."]) continue;
+        if (only) return nil;
+        only = name;
+    }
+    return WQLabelFromPreferencesPlistName(only);
 }
 #endif

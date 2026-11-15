@@ -42,11 +42,15 @@ from the next start.
 The container parents can't be listed, so App Data, Extension Data and App
 Groups come from the LaunchServices database, which lists every installed
 app's and extension's containers. It is found once (among the newest files,
-usually within seconds) and remembered. Internal Daemons, and the app folders
-when the database can't be read, need a scan of every file id (`fsgetpath`,
-the way KAMUI does it): minutes on a well-used device the first time, so WQ
-Files asks before it starts and shows a scan window; later scans only check
-new files.
+usually within seconds) and remembered. Containers the database leaves
+unnamed fall back to their own contents: a saved-state folder
+(`<bundle id>.savedState`), SplashBoard's snapshot folders
+(`<bundle id> - {DEFAULT GROUP}`) or exactly one Preferences plist; group
+containers only that plist. Ambiguity labels nothing. Internal Daemons, and
+the app folders when the database can't be read, need a scan of every file id
+(`fsgetpath`, the way KAMUI does it): minutes on a well-used device the first
+time, so WQ Files asks before it starts and shows a scan window; later scans
+only check new files.
 
 ## Tools
 
@@ -269,7 +273,12 @@ The deployment minimum is iOS 26.0. Builds first run the host regression suite,
 then stage and validate the archive, metadata, signature and App Group before
 replacing `WQFiles.ipa` in the project directory. Set `WQ_SKIP_PREFLIGHT=1` for
 fixture builds that do not have a test tree. For a separate output, set
-`WQFILES_FINAL_IPA` to an absolute path in an existing directory. The source
+`WQFILES_FINAL_IPA` to an absolute path in an existing directory. For a
+development build that installs straight onto profile devices (devicectl or
+Xcode), set `WQFILES_CODESIGN_IDENTITY` to a development certificate; the
+newest downloaded provisioning profile matching the bundle id and App Group is
+embedded, `get-task-allow` is added, and the bundle is signed with that
+identity (`WQFILES_PROVISION_PROFILE` picks a profile explicitly). The source
 updater validates the IPA's embedded metadata before atomically replacing
 `source.json`; its version/build arguments must match the artifact, and an
 existing release description is preserved when no new notes are supplied.

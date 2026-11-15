@@ -3369,6 +3369,73 @@ void wq_set_container_label_resolver(NSString *(*resolver)(NSString *path))
     gContainerLabelResolver = resolver;
 }
 
+// Last resort for containers nothing else identifies (xattr, caches, the
+// LaunchServices database, all failed): the container's own contents name the
+// app. Data containers: the saved-state folder ("<bundle id>.savedState"),
+// SplashBoard's snapshot folders ("<bundle id> - {DEFAULT GROUP}"), then one
+// Preferences plist. Group containers: only that plist (the group id's).
+// Only an unambiguous match labels - a wrong id would misdirect backups,
+// restores and clears, so several different candidates mean no id. Results
+// are tied to the folder object and dropped by an explicit refresh, like the
+// other label caches; a container without a match is remembered too, so
+// browsers don't re-list its folders on every row.
+static NSString *wq_container_label_heuristic(NSString *dir)
+{
+    static NSObject *lock;
+    static NSMutableDictionary<NSString *, id> *cached;   // path -> id or NSNull (checked, none)
+    static NSMutableDictionary<NSString *, NSArray<NSNumber *> *> *identities;
+    static NSUInteger cachedGeneration;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{ lock = [NSObject new]; });
+    NSString *key = WQCanonicalVarPath(dir);
+    @synchronized (lock) {
+        NSUInteger generation = atomic_load(&gWQLabelGeneration);
+        if (!cached || generation != cachedGeneration) {
+            cached = [NSMutableDictionary new];
+            identities = [NSMutableDictionary new];
+            cachedGeneration = generation;
+        }
+        id known = [cached objectForKey:key];
+        if (known) {
+            NSArray<NSNumber *> *identity = nil;
+            WQLabelIdentity state = wq_label_identity(key, &identity);
+            if (wq_label_identity_matches(identities, key, state, identity))
+                return [known isKindOfClass:NSString.class] ? known : nil;
+            [cached removeObjectForKey:key];
+        }
+
+        NSString *kind = nil;
+        if ([key containsString:@"/Containers/Data/Application/"] ||
+            [key containsString:@"/Containers/Data/PluginKitPlugin/"]) kind = @"data";
+        else if ([key containsString:@"/Containers/Shared/AppGroup/"]) kind = @"group";
+        if (!kind) return nil;   // not a container folder these heuristics apply to; not cached
+
+        // Without a token for the container, listing its parts can fail with
+        // 'no such file' (see wq_make_backup_from in WQApps.m).
+        wq_grant(dir);
+        NSString *library = [dir stringByAppendingPathComponent:@"Library"];
+        NSString *found = nil, *source = nil;
+        if ([kind isEqualToString:@"data"]) {
+            NSArray<NSString *> *entries = wq_list([library stringByAppendingPathComponent:@"Saved Application State"], NULL) ?: @[];
+            found = WQLabelFromSavedStateEntries(entries);
+            if (found) source = @"its saved-state folder";
+        }
+        if (!found && [kind isEqualToString:@"data"]) {
+            NSArray<NSString *> *entries = wq_list([library stringByAppendingPathComponent:@"SplashBoard/Snapshots"], NULL) ?: @[];
+            found = WQLabelFromSplashBoardEntries(entries);
+            if (found) source = @"SplashBoard snapshots";
+        }
+        if (!found) {
+            NSArray<NSString *> *entries = wq_list([library stringByAppendingPathComponent:@"Preferences"], NULL) ?: @[];
+            found = WQLabelFromPreferencesEntries(entries);
+            if (found) source = @"its Preferences plist";
+        }
+        cached[key] = found ?: NSNull.null;
+        if (found) wq_log(@"label: %@ identified as %@ by %@", dir.lastPathComponent, found, source);
+        return found;
+    }
+}
+
 NSString *wq_container_label(NSString *dir)
 {
     char buf[512];
@@ -3410,13 +3477,23 @@ NSString *wq_container_label(NSString *dir)
     // bundle ids (set by the app; this file doesn't depend on that module).
     NSString *resolved = gContainerLabelResolver ? gContainerLabelResolver(WQCanonicalVarPath(dir)) : nil;
     if (resolved.length) return resolved;
-    // The metadata plist is usually root-only (mode 600); only try it when the
-    // owner and mode let this app read it, so the Log isn't flooded.
+    // Last resort: what the container's own contents say, and the metadata
+    // plist. The plist is usually root-only (mode 600); only read it when the
+    // owner and mode let this app read it, so the Log isn't flooded. Two
+    // answers that disagree label nothing.
+    NSString *fromContents = wq_container_label_heuristic(dir);
+    NSString *fromPlist = nil;
     NSString *meta = [dir stringByAppendingPathComponent:@".com.apple.mobile_container_manager.metadata.plist"];
-    if (wq_permission_hint(meta, NO)) return nil;
-    NSData *data = wq_read(meta, 256 * 1024, NULL);
-    if (!data) return nil;
-    NSDictionary *plist = [NSPropertyListSerialization propertyListWithData:data options:0 format:NULL error:nil];
-    id ident = [plist isKindOfClass:NSDictionary.class] ? plist[@"MCMMetadataIdentifier"] : nil;
-    return [ident isKindOfClass:NSString.class] ? ident : nil;
+    if (!wq_permission_hint(meta, NO)) {
+        NSData *data = wq_read(meta, 256 * 1024, NULL);
+        NSDictionary *plist = data ? [NSPropertyListSerialization propertyListWithData:data options:0 format:NULL error:nil] : nil;
+        id ident = [plist isKindOfClass:NSDictionary.class] ? plist[@"MCMMetadataIdentifier"] : nil;
+        if ([ident isKindOfClass:NSString.class]) fromPlist = ident;
+    }
+    if (fromContents.length && fromPlist.length && ![fromContents isEqualToString:fromPlist]) {
+        wq_log(@"label: the contents and the metadata plist of %@ disagree (%@, %@); neither is used",
+               dir.lastPathComponent, fromContents, fromPlist);
+        return nil;
+    }
+    return fromContents.length ? fromContents : fromPlist;
 }
