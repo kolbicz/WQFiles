@@ -1131,6 +1131,9 @@
 "The Cache Cleaner will offer to empty “%@” of %@ (the folder itself stays)." = "캐시 정리기에서 “%@”(%@)을(를) 비우도록 제안합니다(폴더 자체는 남습니다).";
 "The Cache Cleaner will offer to delete “%@” of %@." = "캐시 정리기에서 “%@”(%@)을(를) 삭제하도록 제안합니다.";
 "Add to Cache Cleaner?" = "캐시 정리기에 추가하시겠습니까?";
-"It's never selected by default; you choose it there each time. Only add what the app can do without: anything it keeps there (drafts, downloads, logins) is gone once cleaned." = "기본으로 선택되지 않으며, 매번 그곳에서 직접 선택합니다. 앱에 없어도 되는 것만 추가하세요. 앱이 그곳에 보관하는 것(임시 저장본, 다운로드, 로그인)은 정리 후 사라집니다.";
 "Added by you · %@" = "직접 추가함 · %@";
 "Show in File Browser" = "파일 브라우저에서 보기";
+"Always Select" = "항상 선택";
+"Select by Hand" = "직접 선택";
+"Select Automatically" = "자동으로 선택";
+"Always Select: it's selected after every scan and by Select All, like caches. Select by Hand: you pick it each time. You can change this later by touching and holding it in the Cache Cleaner.\n\nOnly add what the app can do without: anything it keeps there (drafts, downloads, logins) is gone once cleaned." = "항상 선택: 캐시처럼 스캔할 때마다, 그리고 모두 선택 시 선택됩니다. 직접 선택: 매번 직접 고릅니다. 나중에 캐시 정리기에서 길게 눌러 바꿀 수 있습니다.\n\n앱에 없어도 되는 것만 추가하세요. 앱이 그곳에 보관하는 것(임시 저장본, 다운로드, 로그인)은 정리 후 사라집니다.";

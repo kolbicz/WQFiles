@@ -1131,6 +1131,9 @@
 "The Cache Cleaner will offer to empty “%@” of %@ (the folder itself stays)." = "Czyszczenie pamięci podręcznej zaproponuje opróżnienie „%@” aplikacji %@ (sam folder zostanie).";
 "The Cache Cleaner will offer to delete “%@” of %@." = "Czyszczenie pamięci podręcznej zaproponuje usunięcie „%@” aplikacji %@.";
 "Add to Cache Cleaner?" = "Dodać do czyszczenia pamięci podręcznej?";
-"It's never selected by default; you choose it there each time. Only add what the app can do without: anything it keeps there (drafts, downloads, logins) is gone once cleaned." = "Nigdy nie jest zaznaczone domyślnie; wybierasz je tam za każdym razem. Dodawaj tylko to, bez czego aplikacja się obejdzie: to, co tam przechowuje (szkice, pobrane pliki, logowania), zniknie po czyszczeniu.";
 "Added by you · %@" = "Dodane przez Ciebie · %@";
 "Show in File Browser" = "Pokaż w przeglądarce plików";
+"Always Select" = "Zaznaczaj zawsze";
+"Select by Hand" = "Zaznaczaj ręcznie";
+"Select Automatically" = "Zaznaczaj automatycznie";
+"Always Select: it's selected after every scan and by Select All, like caches. Select by Hand: you pick it each time. You can change this later by touching and holding it in the Cache Cleaner.\n\nOnly add what the app can do without: anything it keeps there (drafts, downloads, logins) is gone once cleaned." = "Zaznaczaj zawsze: jest zaznaczane po każdym skanowaniu i przez Zaznacz wszystko, jak pamięć podręczna. Zaznaczaj ręcznie: wybierasz je za każdym razem. Możesz to później zmienić, przytrzymując je w czyszczeniu pamięci podręcznej.\n\nDodawaj tylko to, bez czego aplikacja się obejdzie: to, co tam przechowuje (szkice, pobrane pliki, logowania), zniknie po czyszczeniu.";

@@ -1131,6 +1131,9 @@
 "The Cache Cleaner will offer to empty “%@” of %@ (the folder itself stays)." = "The Cache Cleaner will offer to empty “%@” of %@ (the folder itself stays).";
 "The Cache Cleaner will offer to delete “%@” of %@." = "The Cache Cleaner will offer to delete “%@” of %@.";
 "Add to Cache Cleaner?" = "Add to Cache Cleaner?";
-"It's never selected by default; you choose it there each time. Only add what the app can do without: anything it keeps there (drafts, downloads, logins) is gone once cleaned." = "It's never selected by default; you choose it there each time. Only add what the app can do without: anything it keeps there (drafts, downloads, logins) is gone once cleaned.";
 "Added by you · %@" = "Added by you · %@";
 "Show in File Browser" = "Show in File Browser";
+"Always Select" = "Always Select";
+"Select by Hand" = "Select by Hand";
+"Select Automatically" = "Select Automatically";
+"Always Select: it's selected after every scan and by Select All, like caches. Select by Hand: you pick it each time. You can change this later by touching and holding it in the Cache Cleaner.\n\nOnly add what the app can do without: anything it keeps there (drafts, downloads, logins) is gone once cleaned." = "Always Select: it's selected after every scan and by Select All, like caches. Select by Hand: you pick it each time. You can change this later by touching and holding it in the Cache Cleaner.\n\nOnly add what the app can do without: anything it keeps there (drafts, downloads, logins) is gone once cleaned.";

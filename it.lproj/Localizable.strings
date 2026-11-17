@@ -1127,6 +1127,9 @@
 "The Cache Cleaner will offer to empty “%@” of %@ (the folder itself stays)." = "Pulizia cache proporrà di svuotare “%@” di %@ (la cartella stessa resta).";
 "The Cache Cleaner will offer to delete “%@” of %@." = "Pulizia cache proporrà di eliminare “%@” di %@.";
 "Add to Cache Cleaner?" = "Aggiungere a Pulizia cache?";
-"It's never selected by default; you choose it there each time. Only add what the app can do without: anything it keeps there (drafts, downloads, logins) is gone once cleaned." = "Non è mai selezionato per impostazione predefinita; lo scegli lì ogni volta. Aggiungi solo ciò di cui l'app può fare a meno: quello che vi conserva (bozze, download, accessi) andrà perso dopo la pulizia.";
 "Added by you · %@" = "Aggiunto da te · %@";
 "Show in File Browser" = "Mostra nel browser file";
+"Always Select" = "Seleziona sempre";
+"Select by Hand" = "Seleziona a mano";
+"Select Automatically" = "Seleziona automaticamente";
+"Always Select: it's selected after every scan and by Select All, like caches. Select by Hand: you pick it each time. You can change this later by touching and holding it in the Cache Cleaner.\n\nOnly add what the app can do without: anything it keeps there (drafts, downloads, logins) is gone once cleaned." = "Seleziona sempre: viene selezionato dopo ogni scansione e con Seleziona tutto, come le cache. Seleziona a mano: lo scegli ogni volta. Puoi cambiarlo in seguito tenendolo premuto in Pulizia cache.\n\nAggiungi solo ciò di cui l'app può fare a meno: quello che vi conserva (bozze, download, accessi) andrà perso dopo la pulizia.";

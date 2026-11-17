@@ -110,9 +110,10 @@ new files.
   jump to its Caches, tmp or data folder. **Your own folders and files:**
   long-press one inside an app's data (for example Instagram's
   `Library/Application Support/Instagram/VideoUpload`, which keeps uploaded
-  videos) → **Add to Cache Cleaner**. It then appears there as "Added by you":
-  never selected by default and left out of Select All, a folder is emptied,
-  a file deleted. Stored by app, so it keeps working after the app moves to a
+  videos) → **Add to Cache Cleaner**, choosing **Always Select** (selected
+  after every scan and by Select All, like caches) or **Select by Hand**. It
+  then appears there as "Added by you"; a folder is emptied, a file deleted.
+  Long-press it in the Cache Cleaner to switch Select Automatically. Stored by app, so it keeps working after the app moves to a
   new container. Long-press it in the Cache Cleaner to remove it from the list.
 - **Files**: browse, read and share files; each opens in the fitting tool,
   and **Open As** switches between them. Saving writes back in place (same

@@ -1131,6 +1131,9 @@
 "The Cache Cleaner will offer to empty “%@” of %@ (the folder itself stays)." = "缓存清理将提供清空“%@”（属于 %@），文件夹本身保留。";
 "The Cache Cleaner will offer to delete “%@” of %@." = "缓存清理将提供删除“%@”（属于 %@）。";
 "Add to Cache Cleaner?" = "添加到缓存清理？";
-"It's never selected by default; you choose it there each time. Only add what the app can do without: anything it keeps there (drafts, downloads, logins) is gone once cleaned." = "它永远不会默认选中，每次都由你在那里选择。只添加 App 可以舍弃的内容：它保存在那里的东西（草稿、下载、登录）清理后将会丢失。";
 "Added by you · %@" = "由你添加 · %@";
 "Show in File Browser" = "在文件浏览器中显示";
+"Always Select" = "始终选择";
+"Select by Hand" = "手动选择";
+"Select Automatically" = "自动选择";
+"Always Select: it's selected after every scan and by Select All, like caches. Select by Hand: you pick it each time. You can change this later by touching and holding it in the Cache Cleaner.\n\nOnly add what the app can do without: anything it keeps there (drafts, downloads, logins) is gone once cleaned." = "始终选择：像缓存一样，在每次扫描后以及“全选”时被选中。手动选择：每次由你自己选择。之后可在缓存清理中按住它来更改。\n\n只添加 App 可以舍弃的内容：它保存在那里的东西（草稿、下载、登录）清理后将会丢失。";

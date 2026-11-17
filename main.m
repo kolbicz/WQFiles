@@ -1655,12 +1655,15 @@ static void wq_toggle_cache_cleaner_target(UIViewController *host, NSString *pat
                 ? WQLocalizedFormat(@"The Cache Cleaner will offer to empty “%@” of %@ (the folder itself stays).", WQVerbatim(path.lastPathComponent), WQVerbatim(app))
                 : WQLocalizedFormat(@"The Cache Cleaner will offer to delete “%@” of %@.", WQVerbatim(path.lastPathComponent), WQVerbatim(app));
             UIAlertController *alert = wq_alert_controller(@"Add to Cache Cleaner?",
-                WQVerbatim([what stringByAppendingFormat:@" %@", WQLocalized(@"It's never selected by default; you choose it there each time. Only add what the app can do without: anything it keeps there (drafts, downloads, logins) is gone once cleaned.")]),
+                WQVerbatim([what stringByAppendingFormat:@"\n\n%@", WQLocalized(@"Always Select: it's selected after every scan and by Select All, like caches. Select by Hand: you pick it each time. You can change this later by touching and holding it in the Cache Cleaner.\n\nOnly add what the app can do without: anything it keeps there (drafts, downloads, logins) is gone once cleaned.")]),
                 UIAlertControllerStyleAlert);
-            [alert addAction:wq_alert_action(@"Cancel", UIAlertActionStyleCancel, nil)];
-            [alert addAction:wq_alert_action(@"Add", UIAlertActionStyleDefault, ^(UIAlertAction *__unused a) {
-                wq_cache_custom_target_add(bundle, app, container, relative, !isDir);
+            [alert addAction:wq_alert_action(@"Always Select", UIAlertActionStyleDefault, ^(UIAlertAction *__unused a) {
+                wq_cache_custom_target_add(bundle, app, container, relative, !isDir, YES);
             })];
+            [alert addAction:wq_alert_action(@"Select by Hand", UIAlertActionStyleDefault, ^(UIAlertAction *__unused a) {
+                wq_cache_custom_target_add(bundle, app, container, relative, !isDir, NO);
+            })];
+            [alert addAction:wq_alert_action(@"Cancel", UIAlertActionStyleCancel, nil)];
             [h presentViewController:alert animated:YES completion:nil];
         });
     });

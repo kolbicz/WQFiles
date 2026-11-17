@@ -1131,6 +1131,9 @@
 "The Cache Cleaner will offer to empty “%@” of %@ (the folder itself stays)." = "El limpiador de caché ofrecerá vaciar «%@» de %@ (la carpeta se conserva).";
 "The Cache Cleaner will offer to delete “%@” of %@." = "El limpiador de caché ofrecerá eliminar «%@» de %@.";
 "Add to Cache Cleaner?" = "¿Añadir al limpiador de caché?";
-"It's never selected by default; you choose it there each time. Only add what the app can do without: anything it keeps there (drafts, downloads, logins) is gone once cleaned." = "Nunca se selecciona por defecto; lo eliges allí cada vez. Añade solo lo que la app pueda perder: lo que guarde ahí (borradores, descargas, inicios de sesión) desaparece al limpiar.";
 "Added by you · %@" = "Añadido por ti · %@";
 "Show in File Browser" = "Mostrar en el explorador de archivos";
+"Always Select" = "Seleccionar siempre";
+"Select by Hand" = "Seleccionar a mano";
+"Select Automatically" = "Seleccionar automáticamente";
+"Always Select: it's selected after every scan and by Select All, like caches. Select by Hand: you pick it each time. You can change this later by touching and holding it in the Cache Cleaner.\n\nOnly add what the app can do without: anything it keeps there (drafts, downloads, logins) is gone once cleaned." = "Seleccionar siempre: se selecciona tras cada análisis y con Seleccionar todo, como las cachés. Seleccionar a mano: lo eliges cada vez. Puedes cambiarlo después manteniéndolo pulsado en el limpiador de caché.\n\nAñade solo lo que la app pueda perder: lo que guarde ahí (borradores, descargas, inicios de sesión) desaparece al limpiar.";

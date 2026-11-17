@@ -1131,6 +1131,9 @@
 "The Cache Cleaner will offer to empty “%@” of %@ (the folder itself stays)." = "Очистка кэша предложит очистить «%@» приложения %@ (сама папка останется).";
 "The Cache Cleaner will offer to delete “%@” of %@." = "Очистка кэша предложит удалить «%@» приложения %@.";
 "Add to Cache Cleaner?" = "Добавить в очистку кэша?";
-"It's never selected by default; you choose it there each time. Only add what the app can do without: anything it keeps there (drafts, downloads, logins) is gone once cleaned." = "Это никогда не выбирается по умолчанию — вы выбираете это там каждый раз. Добавляйте только то, без чего приложение обойдётся: всё, что оно там хранит (черновики, загрузки, входы), после очистки пропадёт.";
 "Added by you · %@" = "Добавлено вами · %@";
 "Show in File Browser" = "Показать в файловом браузере";
+"Always Select" = "Выбирать всегда";
+"Select by Hand" = "Выбирать вручную";
+"Select Automatically" = "Выбирать автоматически";
+"Always Select: it's selected after every scan and by Select All, like caches. Select by Hand: you pick it each time. You can change this later by touching and holding it in the Cache Cleaner.\n\nOnly add what the app can do without: anything it keeps there (drafts, downloads, logins) is gone once cleaned." = "Выбирать всегда: выбирается после каждого сканирования и кнопкой «Выбрать все», как кэш. Выбирать вручную: вы выбираете это каждый раз. Позже это можно изменить, нажав и удерживая элемент в очистке кэша.\n\nДобавляйте только то, без чего приложение обойдётся: всё, что оно там хранит (черновики, загрузки, входы), после очистки пропадёт.";

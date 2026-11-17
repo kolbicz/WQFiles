@@ -1131,6 +1131,9 @@
 "The Cache Cleaner will offer to empty “%@” of %@ (the folder itself stays)." = "Dọn dẹp Bộ đệm sẽ đề xuất làm trống “%@” của %@ (bản thân thư mục vẫn còn).";
 "The Cache Cleaner will offer to delete “%@” of %@." = "Dọn dẹp Bộ đệm sẽ đề xuất xóa “%@” của %@.";
 "Add to Cache Cleaner?" = "Thêm vào Dọn dẹp Bộ đệm?";
-"It's never selected by default; you choose it there each time. Only add what the app can do without: anything it keeps there (drafts, downloads, logins) is gone once cleaned." = "Mục này không bao giờ được chọn sẵn; mỗi lần bạn tự chọn ở đó. Chỉ thêm những gì ứng dụng có thể thiếu: những gì nó lưu ở đó (bản nháp, tệp tải về, đăng nhập) sẽ mất sau khi dọn.";
 "Added by you · %@" = "Do bạn thêm · %@";
 "Show in File Browser" = "Hiện trong Trình duyệt tệp";
+"Always Select" = "Luôn chọn";
+"Select by Hand" = "Chọn thủ công";
+"Select Automatically" = "Tự động chọn";
+"Always Select: it's selected after every scan and by Select All, like caches. Select by Hand: you pick it each time. You can change this later by touching and holding it in the Cache Cleaner.\n\nOnly add what the app can do without: anything it keeps there (drafts, downloads, logins) is gone once cleaned." = "Luôn chọn: mục này được chọn sau mỗi lần quét và khi Chọn tất cả, giống bộ đệm. Chọn thủ công: bạn tự chọn mỗi lần. Có thể đổi sau bằng cách nhấn giữ mục đó trong Dọn dẹp Bộ đệm.\n\nChỉ thêm những gì ứng dụng có thể thiếu: những gì nó lưu ở đó (bản nháp, tệp tải về, đăng nhập) sẽ mất sau khi dọn.";

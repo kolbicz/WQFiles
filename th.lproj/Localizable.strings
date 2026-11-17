@@ -1131,6 +1131,9 @@
 "The Cache Cleaner will offer to empty “%@” of %@ (the folder itself stays)." = "ตัวล้างแคชจะเสนอให้ล้าง “%@” ของ %@ (ตัวโฟลเดอร์ยังอยู่)";
 "The Cache Cleaner will offer to delete “%@” of %@." = "ตัวล้างแคชจะเสนอให้ลบ “%@” ของ %@";
 "Add to Cache Cleaner?" = "เพิ่มลงในตัวล้างแคชไหม";
-"It's never selected by default; you choose it there each time. Only add what the app can do without: anything it keeps there (drafts, downloads, logins) is gone once cleaned." = "จะไม่ถูกเลือกไว้ล่วงหน้า คุณเลือกเองที่นั่นทุกครั้ง เพิ่มเฉพาะสิ่งที่แอปไม่จำเป็นต้องมี: สิ่งที่แอปเก็บไว้ที่นั่น (แบบร่าง ไฟล์ดาวน์โหลด การลงชื่อเข้าใช้) จะหายไปหลังล้าง";
 "Added by you · %@" = "คุณเพิ่มเอง · %@";
 "Show in File Browser" = "แสดงในตัวเรียกดูไฟล์";
+"Always Select" = "เลือกเสมอ";
+"Select by Hand" = "เลือกเอง";
+"Select Automatically" = "เลือกอัตโนมัติ";
+"Always Select: it's selected after every scan and by Select All, like caches. Select by Hand: you pick it each time. You can change this later by touching and holding it in the Cache Cleaner.\n\nOnly add what the app can do without: anything it keeps there (drafts, downloads, logins) is gone once cleaned." = "เลือกเสมอ: จะถูกเลือกหลังการสแกนทุกครั้งและเมื่อกดเลือกทั้งหมด เหมือนแคช เลือกเอง: คุณเลือกเองทุกครั้ง เปลี่ยนภายหลังได้โดยกดค้างที่รายการในตัวล้างแคช\n\nเพิ่มเฉพาะสิ่งที่แอปไม่จำเป็นต้องมี: สิ่งที่แอปเก็บไว้ที่นั่น (แบบร่าง ไฟล์ดาวน์โหลด การลงชื่อเข้าใช้) จะหายไปหลังล้าง";

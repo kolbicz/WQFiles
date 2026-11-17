@@ -61,6 +61,7 @@ static NSArray<NSString *> *WQCacheCrashLogCandidates(void)
 // A folder/file added from the file browser: its path in the container.
 @property (nonatomic, copy) NSString *customRelative;
 @property (nonatomic) BOOL customIsFile;
+@property (nonatomic) BOOL customAutoSelect;   // selected like caches
 @end
 @implementation WQCacheItem
 - (unsigned long long)bytes { return self.cacheBytes + self.tempBytes; }
@@ -271,14 +272,28 @@ NSDictionary *wq_cache_custom_target_for_path(NSString *path)
     return nil;
 }
 
-void wq_cache_custom_target_add(NSString *bundleID, NSString *appName, NSString *container, NSString *relative, BOOL isFile)
+void wq_cache_custom_target_add(NSString *bundleID, NSString *appName, NSString *container, NSString *relative, BOOL isFile,
+                                BOOL autoSelect)
 {
     if (!bundleID.length || !WQCacheCustomRelativeValid(relative) || wq_cache_custom_target_contains(bundleID, relative)) return;
     NSMutableArray *targets = [wq_cache_custom_targets() mutableCopy];
     [targets addObject:@{@"bundle": bundleID, @"app": appName ?: bundleID, @"container": container ?: @"",
-                         @"path": relative, @"file": @(isFile)}];
+                         @"path": relative, @"file": @(isFile), @"auto": @(autoSelect)}];
     [NSUserDefaults.standardUserDefaults setObject:targets forKey:kWQCacheCustomTargetsPref];
     wq_log(@"cache cleaner: added %@ of %@", relative, bundleID);
+}
+
+void wq_cache_custom_target_set_auto_select(NSString *bundleID, NSString *relative, BOOL autoSelect)
+{
+    NSMutableArray *targets = [NSMutableArray new];
+    for (NSDictionary *t in wq_cache_custom_targets()) {
+        if ([t[@"bundle"] isEqualToString:bundleID] && [t[@"path"] isEqualToString:relative]) {
+            NSMutableDictionary *changed = [t mutableCopy];
+            changed[@"auto"] = @(autoSelect);
+            [targets addObject:changed];
+        } else [targets addObject:t];
+    }
+    [NSUserDefaults.standardUserDefaults setObject:targets forKey:kWQCacheCustomTargetsPref];
 }
 
 void wq_cache_custom_target_remove(NSString *bundleID, NSString *relative)
@@ -505,7 +520,7 @@ static BOOL WQCacheValidateItem(WQCacheItem *item, NSString **reason)
 {
     NSMutableArray *saved = [NSMutableArray new];
     for (WQCacheItem *item in rows) {
-        NSMutableDictionary *encoded = [WQScanEncode(item, @[@"name", @"bundleID", @"containerPath", @"cacheBytes", @"tempBytes", @"cacheKnown", @"tempKnown", @"limited", @"crashLogs", @"containerIdentityKnown", @"containerDevice", @"containerInode", @"containerMode", @"customRelative", @"customIsFile"]) mutableCopy];
+        NSMutableDictionary *encoded = [WQScanEncode(item, @[@"name", @"bundleID", @"containerPath", @"cacheBytes", @"tempBytes", @"cacheKnown", @"tempKnown", @"limited", @"crashLogs", @"containerIdentityKnown", @"containerDevice", @"containerInode", @"containerMode", @"customRelative", @"customIsFile", @"customAutoSelect"]) mutableCopy];
         NSMutableArray *records = [NSMutableArray new];
         for (WQCacheTargetRecord *record in item.targetRecords)
             [records addObject:WQScanEncode(record, @[@"path", @"relativePath", @"existed", @"identityKnown", @"device", @"inode", @"mode"])];
@@ -524,7 +539,7 @@ static BOOL WQCacheValidateItem(WQCacheItem *item, NSString **reason)
         for (id encoded in [result[@"rows"] isKindOfClass:NSArray.class] ? result[@"rows"] : @[]) {
             if (![encoded isKindOfClass:NSDictionary.class]) continue;
             WQCacheItem *item = [WQCacheItem new];
-            WQScanDecode(item, encoded, @[@"name", @"bundleID", @"containerPath", @"customRelative"], @[@"cacheBytes", @"tempBytes", @"cacheKnown", @"tempKnown", @"limited", @"crashLogs", @"containerIdentityKnown", @"containerDevice", @"containerInode", @"containerMode", @"customIsFile"]);
+            WQScanDecode(item, encoded, @[@"name", @"bundleID", @"containerPath", @"customRelative"], @[@"cacheBytes", @"tempBytes", @"cacheKnown", @"tempKnown", @"limited", @"crashLogs", @"containerIdentityKnown", @"containerDevice", @"containerInode", @"containerMode", @"customIsFile", @"customAutoSelect"]);
             NSMutableArray *records = [NSMutableArray new], *targets = [NSMutableArray new];
             for (id entry in [encoded[@"records"] isKindOfClass:NSArray.class] ? encoded[@"records"] : @[]) {
                 if (![entry isKindOfClass:NSDictionary.class] || ![entry[@"path"] isKindOfClass:NSString.class]) continue;
@@ -538,7 +553,7 @@ static BOOL WQCacheValidateItem(WQCacheItem *item, NSString **reason)
             // up to 0.9.10 (#67); historical results (restored after a
             // restart, or finished elsewhere) never restore a destructive
             // selection implicitly.
-            item.selected = _selectNextResult && !item.limited && !item.customRelative;
+            item.selected = _selectNextResult && !item.limited && (!item.customRelative || item.customAutoSelect);
             [rows addObject:item];
         }
         _items = rows;
@@ -681,7 +696,7 @@ static BOOL WQCacheValidateItem(WQCacheItem *item, NSString **reason)
     NSArray *visible = self.visibleItems;
     BOOL hasEligible = NO, allVisible = YES;
     for (WQCacheItem *it in visible) {
-        if (it.limited || it.customRelative) continue;
+        if (it.limited || (it.customRelative && !it.customAutoSelect)) continue;
         hasEligible = YES;
         if (!it.selected) allVisible = NO;
     }
@@ -860,6 +875,7 @@ static BOOL WQCacheValidateItem(WQCacheItem *item, NSString **reason)
                         custom.name = wq_display_name(cbid) ?: t[@"app"] ?: cbid;
                         custom.customRelative = relative;
                         custom.customIsFile = isFile;
+                        custom.customAutoSelect = [t[@"auto"] boolValue];
                         custom.containerPath = c;
                         custom.targets = @[full];
                         custom.targetRecords = @[WQCacheTargetRecordForPath(full, relative)];
@@ -883,7 +899,7 @@ static BOOL WQCacheValidateItem(WQCacheItem *item, NSString **reason)
                         custom.limited = !custom.cacheKnown;
                         WQCacheCaptureContainerIdentity(custom);
                         if (!custom.containerIdentityKnown) custom.limited = YES;
-                        custom.selected = NO;
+                        custom.selected = custom.customAutoSelect && !custom.limited;
                         foundBytes += bytes;
                         [items addObject:custom];
                     }
@@ -1148,6 +1164,10 @@ static BOOL WQCacheValidateItem(WQCacheItem *item, NSString **reason)
             NSString *folder = item.customIsFile ? full.stringByDeletingLastPathComponent : full;
             [actions addObject:[UIAction actionWithTitle:WQLocalizedNullable(@"Show in File Browser") image:[UIImage systemImageNamed:@"folder"]
                                               identifier:nil handler:^(UIAction *__unused a) { [weakSelf openFolder:folder title:item.name]; }]];
+            UIAction *autoSelect = [UIAction actionWithTitle:WQLocalizedNullable(@"Select Automatically") image:[UIImage systemImageNamed:@"checkmark.circle"]
+                                                  identifier:nil handler:^(UIAction *__unused a) { [weakSelf toggleAutoSelect:item]; }];
+            autoSelect.state = item.customAutoSelect ? UIMenuElementStateOn : UIMenuElementStateOff;
+            [actions addObject:autoSelect];
             UIAction *remove = [UIAction actionWithTitle:WQLocalizedNullable(@"Remove from Cache Cleaner") image:[UIImage systemImageNamed:@"minus.circle"]
                                               identifier:nil handler:^(UIAction *__unused a) { [weakSelf removeCustomItem:item]; }];
             remove.attributes = UIMenuElementAttributesDestructive;
@@ -1178,6 +1198,16 @@ static BOOL WQCacheValidateItem(WQCacheItem *item, NSString **reason)
 
 #pragma mark Actions
 
+// Select Automatically on/off for an added folder/file; on also selects it now.
+- (void)toggleAutoSelect:(WQCacheItem *)item
+{
+    item.customAutoSelect = !item.customAutoSelect;
+    wq_cache_custom_target_set_auto_select(item.bundleID ?: @"", item.customRelative ?: @"", item.customAutoSelect);
+    if (item.customAutoSelect && !item.limited) item.selected = YES;
+    [self.tableView reloadData];
+    [self updateButtons];
+}
+
 // Takes an added folder/file off the list (nothing is deleted).
 - (void)removeCustomItem:(WQCacheItem *)item
 {
@@ -1190,11 +1220,12 @@ static BOOL WQCacheValidateItem(WQCacheItem *item, NSString **reason)
     [self updateButtons];
 }
 
-// Applies to the rows the current search shows. Added folders/files are
-// left as they are: they're only ever selected by hand.
+// Applies to the rows the current search shows. Added folders/files set to
+// "by hand" are left as they are.
 - (void)selectWhere:(BOOL (^)(WQCacheItem *item))rule
 {
-    for (WQCacheItem *it in self.visibleItems) if (!it.customRelative) it.selected = !it.limited && rule(it);
+    for (WQCacheItem *it in self.visibleItems)
+        if (!it.customRelative || it.customAutoSelect) it.selected = !it.limited && rule(it);
     [self.tableView reloadData];
     [self updateButtons];
 }

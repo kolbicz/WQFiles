@@ -1127,6 +1127,9 @@
 "The Cache Cleaner will offer to empty “%@” of %@ (the folder itself stays)." = "سيعرض منظّف ذاكرة التخزين المؤقت إفراغ “%@” الخاص بـ %@ (يبقى المجلد نفسه).";
 "The Cache Cleaner will offer to delete “%@” of %@." = "سيعرض منظّف ذاكرة التخزين المؤقت حذف “%@” الخاص بـ %@.";
 "Add to Cache Cleaner?" = "هل تريد الإضافة إلى منظّف ذاكرة التخزين المؤقت؟";
-"It's never selected by default; you choose it there each time. Only add what the app can do without: anything it keeps there (drafts, downloads, logins) is gone once cleaned." = "لا يُحدَّد افتراضيًا أبدًا؛ تختاره هناك في كل مرة. أضف فقط ما يستغني عنه التطبيق: ما يحفظه هناك (المسودات والتنزيلات وتسجيلات الدخول) يضيع بعد التنظيف.";
 "Added by you · %@" = "أضفته أنت · %@";
 "Show in File Browser" = "عرض في مستعرض الملفات";
+"Always Select" = "التحديد دائمًا";
+"Select by Hand" = "التحديد يدويًا";
+"Select Automatically" = "التحديد تلقائيًا";
+"Always Select: it's selected after every scan and by Select All, like caches. Select by Hand: you pick it each time. You can change this later by touching and holding it in the Cache Cleaner.\n\nOnly add what the app can do without: anything it keeps there (drafts, downloads, logins) is gone once cleaned." = "التحديد دائمًا: يُحدَّد بعد كل فحص وعند تحديد الكل، مثل ذاكرة التخزين المؤقت. التحديد يدويًا: تختاره بنفسك في كل مرة. يمكنك تغيير ذلك لاحقًا بالضغط المطوّل عليه في منظّف ذاكرة التخزين المؤقت.\n\nأضف فقط ما يستغني عنه التطبيق: ما يحفظه هناك (المسودات والتنزيلات وتسجيلات الدخول) يضيع بعد التنظيف.";
