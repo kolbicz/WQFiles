@@ -21,6 +21,15 @@
       "category": "utilities",
       "versions": [
         {
+          "version": "0.9.18",
+          "buildVersion": "106",
+          "date": "2026-11-17",
+          "size": 2171189,
+          "downloadURL": "https://github.com/kolbicz/WQFiles/releases/download/v0.9.18/WQFiles.ipa",
+          "localizedDescription": "Custom inspectors (read-only JavaScript, install from a .zip), your own folders and files in the Cache Cleaner, and Japanese.",
+          "minOSVersion": "26.0"
+        },
+        {
           "version": "0.9.17",
           "buildVersion": "105",
           "date": "2026-11-17",
