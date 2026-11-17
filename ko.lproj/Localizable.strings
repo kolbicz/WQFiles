@@ -1122,3 +1122,15 @@
 "The ZIP doesn't contain an inspector: manifest.json must be at its top or inside its one folder." = "ZIP에 인스펙터가 없습니다. manifest.json은 맨 위 또는 하나뿐인 폴더 안에 있어야 합니다.";
 "The installed inspector can't be replaced: %s" = "설치된 인스펙터를 바꿀 수 없습니다: %s";
 "The inspector can't be installed: %s" = "인스펙터를 설치할 수 없습니다: %s";
+"Add to Cache Cleaner" = "캐시 정리기에 추가";
+"Remove from Cache Cleaner" = "캐시 정리기에서 제거";
+"Removed from Cache Cleaner" = "캐시 정리기에서 제거됨";
+"%@ is no longer offered in the Cache Cleaner. Nothing was deleted." = "%@은(는) 더 이상 캐시 정리기에 표시되지 않습니다. 아무것도 삭제되지 않았습니다.";
+"Not Added" = "추가되지 않음";
+"The app this folder belongs to can't be identified, so it can't be added." = "이 폴더가 속한 앱을 확인할 수 없어 추가할 수 없습니다.";
+"The Cache Cleaner will offer to empty “%@” of %@ (the folder itself stays)." = "캐시 정리기에서 “%@”(%@)을(를) 비우도록 제안합니다(폴더 자체는 남습니다).";
+"The Cache Cleaner will offer to delete “%@” of %@." = "캐시 정리기에서 “%@”(%@)을(를) 삭제하도록 제안합니다.";
+"Add to Cache Cleaner?" = "캐시 정리기에 추가하시겠습니까?";
+"It's never selected by default; you choose it there each time. Only add what the app can do without: anything it keeps there (drafts, downloads, logins) is gone once cleaned." = "기본으로 선택되지 않으며, 매번 그곳에서 직접 선택합니다. 앱에 없어도 되는 것만 추가하세요. 앱이 그곳에 보관하는 것(임시 저장본, 다운로드, 로그인)은 정리 후 사라집니다.";
+"Added by you · %@" = "직접 추가함 · %@";
+"Show in File Browser" = "파일 브라우저에서 보기";

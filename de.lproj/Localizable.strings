@@ -1118,3 +1118,15 @@
 "The ZIP doesn't contain an inspector: manifest.json must be at its top or inside its one folder." = "Das ZIP enthält keinen Inspektor: manifest.json muss ganz oben oder in seinem einzigen Ordner liegen.";
 "The installed inspector can't be replaced: %s" = "Der installierte Inspektor kann nicht ersetzt werden: %s";
 "The inspector can't be installed: %s" = "Der Inspektor kann nicht installiert werden: %s";
+"Add to Cache Cleaner" = "Zur Cache-Bereinigung hinzufügen";
+"Remove from Cache Cleaner" = "Aus der Cache-Bereinigung entfernen";
+"Removed from Cache Cleaner" = "Aus der Cache-Bereinigung entfernt";
+"%@ is no longer offered in the Cache Cleaner. Nothing was deleted." = "%@ wird in der Cache-Bereinigung nicht mehr angeboten. Es wurde nichts gelöscht.";
+"Not Added" = "Nicht hinzugefügt";
+"The app this folder belongs to can't be identified, so it can't be added." = "Die App, zu der dieser Ordner gehört, lässt sich nicht bestimmen, daher kann er nicht hinzugefügt werden.";
+"The Cache Cleaner will offer to empty “%@” of %@ (the folder itself stays)." = "Die Cache-Bereinigung bietet an, „%@“ von %@ zu leeren (der Ordner selbst bleibt).";
+"The Cache Cleaner will offer to delete “%@” of %@." = "Die Cache-Bereinigung bietet an, „%@“ von %@ zu löschen.";
+"Add to Cache Cleaner?" = "Zur Cache-Bereinigung hinzufügen?";
+"It's never selected by default; you choose it there each time. Only add what the app can do without: anything it keeps there (drafts, downloads, logins) is gone once cleaned." = "Es ist nie vorausgewählt; du wählst es dort jedes Mal selbst aus. Füge nur hinzu, worauf die App verzichten kann: Was sie dort aufbewahrt (Entwürfe, Downloads, Anmeldungen), ist nach dem Bereinigen weg.";
+"Added by you · %@" = "Von dir hinzugefügt · %@";
+"Show in File Browser" = "Im Dateibrowser zeigen";

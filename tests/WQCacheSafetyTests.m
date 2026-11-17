@@ -12,6 +12,25 @@ static void WQRequire(BOOL condition, NSString *message)
 
 int main(void)
 {
+    // Custom targets: which paths may be added.
+    WQRequire(WQCacheCustomRelativeValid(@"Library/Application Support/Instagram/VideoUpload"), @"custom: app folder allowed");
+    WQRequire(WQCacheCustomRelativeValid(@"Documents/drafts.db"), @"custom: Documents file allowed");
+    WQRequire(!WQCacheCustomRelativeValid(@"Library") && !WQCacheCustomRelativeValid(@"Documents"), @"custom: top folders refused");
+    WQRequire(!WQCacheCustomRelativeValid(@"Library/Preferences") && !WQCacheCustomRelativeValid(@"Library/Preferences/a.plist"),
+              @"custom: settings refused");
+    WQRequire(!WQCacheCustomRelativeValid(@"Library/../tmp/x") && !WQCacheCustomRelativeValid(@"/Library/x") &&
+              !WQCacheCustomRelativeValid(@"SystemData/x"), @"custom: escapes and other folders refused");
+    NSString *customContainer = nil;
+    NSString *uuid = @"68DE34E0-0D38-483C-84A5-EC2D585F7DDB";
+    NSString *rel = WQCacheCustomRelativeForPath([NSString stringWithFormat:@"/var/mobile/Containers/Data/Application/%@/Library/Application Support/Instagram/VideoUpload", uuid], &customContainer);
+    WQRequire([rel isEqualToString:@"Library/Application Support/Instagram/VideoUpload"] &&
+              [customContainer isEqualToString:[@"/private/var/mobile/Containers/Data/Application/" stringByAppendingString:uuid]],
+              @"custom: path split into container and relative path");
+    WQRequire(!WQCacheCustomRelativeForPath([NSString stringWithFormat:@"/private/var/mobile/Containers/Data/Application/%@", uuid], NULL) &&
+              !WQCacheCustomRelativeForPath(@"/private/var/mobile/Containers/Data/Application/not-a-uuid/Library/x/y", NULL) &&
+              !WQCacheCustomRelativeForPath(@"/private/var/mobile/Containers/Shared/AppGroup/X/Library/x", NULL),
+              @"custom: container itself, non-UUID and other areas refused");
+
     NSFileManager *fm = NSFileManager.defaultManager;
     NSString *root = [WQCacheSafetyCanonicalPath(NSTemporaryDirectory()) stringByAppendingPathComponent:
                       [NSString stringWithFormat:@"wq-cache-safety-%u", arc4random()]];

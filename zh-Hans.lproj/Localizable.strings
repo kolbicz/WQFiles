@@ -1122,3 +1122,15 @@
 "The ZIP doesn't contain an inspector: manifest.json must be at its top or inside its one folder." = "该 ZIP 不包含检查器：manifest.json 必须位于顶层或其唯一的文件夹中。";
 "The installed inspector can't be replaced: %s" = "无法替换已安装的检查器：%s";
 "The inspector can't be installed: %s" = "无法安装检查器：%s";
+"Add to Cache Cleaner" = "添加到缓存清理";
+"Remove from Cache Cleaner" = "从缓存清理中移除";
+"Removed from Cache Cleaner" = "已从缓存清理中移除";
+"%@ is no longer offered in the Cache Cleaner. Nothing was deleted." = "缓存清理不再提供 %@。没有删除任何内容。";
+"Not Added" = "未添加";
+"The app this folder belongs to can't be identified, so it can't be added." = "无法识别此文件夹所属的 App，因此无法添加。";
+"The Cache Cleaner will offer to empty “%@” of %@ (the folder itself stays)." = "缓存清理将提供清空“%@”（属于 %@），文件夹本身保留。";
+"The Cache Cleaner will offer to delete “%@” of %@." = "缓存清理将提供删除“%@”（属于 %@）。";
+"Add to Cache Cleaner?" = "添加到缓存清理？";
+"It's never selected by default; you choose it there each time. Only add what the app can do without: anything it keeps there (drafts, downloads, logins) is gone once cleaned." = "它永远不会默认选中，每次都由你在那里选择。只添加 App 可以舍弃的内容：它保存在那里的东西（草稿、下载、登录）清理后将会丢失。";
+"Added by you · %@" = "由你添加 · %@";
+"Show in File Browser" = "在文件浏览器中显示";

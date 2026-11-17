@@ -1122,3 +1122,15 @@
 "The ZIP doesn't contain an inspector: manifest.json must be at its top or inside its one folder." = "ZIP ไม่มีตัวตรวจสอบ: manifest.json ต้องอยู่ที่ระดับบนสุดหรือในโฟลเดอร์เดียวของไฟล์นั้น";
 "The installed inspector can't be replaced: %s" = "แทนที่ตัวตรวจสอบที่ติดตั้งไว้ไม่ได้: %s";
 "The inspector can't be installed: %s" = "ติดตั้งตัวตรวจสอบไม่ได้: %s";
+"Add to Cache Cleaner" = "เพิ่มลงในตัวล้างแคช";
+"Remove from Cache Cleaner" = "เอาออกจากตัวล้างแคช";
+"Removed from Cache Cleaner" = "เอาออกจากตัวล้างแคชแล้ว";
+"%@ is no longer offered in the Cache Cleaner. Nothing was deleted." = "%@ จะไม่ถูกเสนอในตัวล้างแคชอีก ไม่มีการลบสิ่งใด";
+"Not Added" = "ไม่ได้เพิ่ม";
+"The app this folder belongs to can't be identified, so it can't be added." = "ระบุแอปที่โฟลเดอร์นี้เป็นของไม่ได้ จึงเพิ่มไม่ได้";
+"The Cache Cleaner will offer to empty “%@” of %@ (the folder itself stays)." = "ตัวล้างแคชจะเสนอให้ล้าง “%@” ของ %@ (ตัวโฟลเดอร์ยังอยู่)";
+"The Cache Cleaner will offer to delete “%@” of %@." = "ตัวล้างแคชจะเสนอให้ลบ “%@” ของ %@";
+"Add to Cache Cleaner?" = "เพิ่มลงในตัวล้างแคชไหม";
+"It's never selected by default; you choose it there each time. Only add what the app can do without: anything it keeps there (drafts, downloads, logins) is gone once cleaned." = "จะไม่ถูกเลือกไว้ล่วงหน้า คุณเลือกเองที่นั่นทุกครั้ง เพิ่มเฉพาะสิ่งที่แอปไม่จำเป็นต้องมี: สิ่งที่แอปเก็บไว้ที่นั่น (แบบร่าง ไฟล์ดาวน์โหลด การลงชื่อเข้าใช้) จะหายไปหลังล้าง";
+"Added by you · %@" = "คุณเพิ่มเอง · %@";
+"Show in File Browser" = "แสดงในตัวเรียกดูไฟล์";

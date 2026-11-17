@@ -1122,3 +1122,15 @@
 "The ZIP doesn't contain an inspector: manifest.json must be at its top or inside its one folder." = "Plik ZIP nie zawiera inspektora: manifest.json musi być na najwyższym poziomie lub w jego jedynym folderze.";
 "The installed inspector can't be replaced: %s" = "Nie można zastąpić zainstalowanego inspektora: %s";
 "The inspector can't be installed: %s" = "Nie można zainstalować inspektora: %s";
+"Add to Cache Cleaner" = "Dodaj do czyszczenia pamięci podręcznej";
+"Remove from Cache Cleaner" = "Usuń z czyszczenia pamięci podręcznej";
+"Removed from Cache Cleaner" = "Usunięto z czyszczenia pamięci podręcznej";
+"%@ is no longer offered in the Cache Cleaner. Nothing was deleted." = "%@ nie jest już proponowany w czyszczeniu pamięci podręcznej. Nic nie usunięto.";
+"Not Added" = "Nie dodano";
+"The app this folder belongs to can't be identified, so it can't be added." = "Nie można ustalić aplikacji, do której należy ten folder, więc nie można go dodać.";
+"The Cache Cleaner will offer to empty “%@” of %@ (the folder itself stays)." = "Czyszczenie pamięci podręcznej zaproponuje opróżnienie „%@” aplikacji %@ (sam folder zostanie).";
+"The Cache Cleaner will offer to delete “%@” of %@." = "Czyszczenie pamięci podręcznej zaproponuje usunięcie „%@” aplikacji %@.";
+"Add to Cache Cleaner?" = "Dodać do czyszczenia pamięci podręcznej?";
+"It's never selected by default; you choose it there each time. Only add what the app can do without: anything it keeps there (drafts, downloads, logins) is gone once cleaned." = "Nigdy nie jest zaznaczone domyślnie; wybierasz je tam za każdym razem. Dodawaj tylko to, bez czego aplikacja się obejdzie: to, co tam przechowuje (szkice, pobrane pliki, logowania), zniknie po czyszczeniu.";
+"Added by you · %@" = "Dodane przez Ciebie · %@";
+"Show in File Browser" = "Pokaż w przeglądarce plików";

@@ -20,6 +20,7 @@
 #import "WQDir.h"
 #import "WQApps.h"
 #import "WQCache.h"
+#import "WQCacheSafety.h"
 #import "WQCore.h"
 #import "WQAccessSafety.h"
 #import <CommonCrypto/CommonDigest.h>
@@ -1626,6 +1627,44 @@ static NSString *wq_info_date(struct timespec ts)
 }
 
 @end
+
+// Touch and hold → Add to / Remove from Cache Cleaner.
+static void wq_toggle_cache_cleaner_target(UIViewController *host, NSString *path, BOOL isDir)
+{
+    NSString *container = nil;
+    NSString *relative = WQCacheCustomRelativeForPath(path, &container);
+    if (!relative) return;
+    NSDictionary *existing = wq_cache_custom_target_for_path(path);
+    if (existing) {
+        wq_cache_custom_target_remove(existing[@"bundle"], relative);
+        wq_alert(host, @"Removed from Cache Cleaner", WQLocalizedFormat(@"%@ is no longer offered in the Cache Cleaner. Nothing was deleted.", WQVerbatim(path.lastPathComponent)));
+        return;
+    }
+    __weak UIViewController *weakHost = host;
+    dispatch_async(wq_io(), ^{
+        NSString *bundle = wq_container_label(container);
+        NSString *app = bundle ? (wq_display_name(bundle) ?: bundle) : nil;
+        dispatch_async(dispatch_get_main_queue(), ^{
+            UIViewController *h = weakHost;
+            if (!h) return;
+            if (!bundle.length) {
+                wq_alert(h, @"Not Added", WQLocalized(@"The app this folder belongs to can't be identified, so it can't be added."));
+                return;
+            }
+            NSString *what = isDir
+                ? WQLocalizedFormat(@"The Cache Cleaner will offer to empty “%@” of %@ (the folder itself stays).", WQVerbatim(path.lastPathComponent), WQVerbatim(app))
+                : WQLocalizedFormat(@"The Cache Cleaner will offer to delete “%@” of %@.", WQVerbatim(path.lastPathComponent), WQVerbatim(app));
+            UIAlertController *alert = wq_alert_controller(@"Add to Cache Cleaner?",
+                WQVerbatim([what stringByAppendingFormat:@" %@", WQLocalized(@"It's never selected by default; you choose it there each time. Only add what the app can do without: anything it keeps there (drafts, downloads, logins) is gone once cleaned.")]),
+                UIAlertControllerStyleAlert);
+            [alert addAction:wq_alert_action(@"Cancel", UIAlertActionStyleCancel, nil)];
+            [alert addAction:wq_alert_action(@"Add", UIAlertActionStyleDefault, ^(UIAlertAction *__unused a) {
+                wq_cache_custom_target_add(bundle, app, container, relative, !isDir);
+            })];
+            [h presentViewController:alert animated:YES completion:nil];
+        });
+    });
+}
 
 // Settings → Inspectors: the folder they're installed in.
 static void wq_open_inspectors_folder(UINavigationController *nav)
@@ -3341,6 +3380,18 @@ static void wq_open_custom_inspector(UIViewController *host, NSString *path, UIV
             WQItem *latest = currentItem();
             if (latest) UIPasteboard.generalPasteboard.string = latest.path;
         }]];
+        // Inside an app's data container: let the Cache Cleaner empty this
+        // folder or delete this file on request.
+        if (!current.isLink && (current.isDir || current.isRegular) && WQCacheCustomRelativeForPath(current.path, NULL)) {
+            NSDictionary *existing = wq_cache_custom_target_for_path(current.path);
+            UIAction *cleaner = [UIAction actionWithTitle:WQLocalizedNullable(existing ? @"Remove from Cache Cleaner" : @"Add to Cache Cleaner")
+                                                    image:[UIImage systemImageNamed:existing ? @"minus.circle" : @"sparkles"] identifier:nil
+                                                  handler:^(UIAction *__unused a) {
+                WQItem *latest = currentItem();
+                if (latest && weakSelf) wq_toggle_cache_cleaner_target(weakSelf, latest.path, latest.isDir);
+            }];
+            [actions addObject:cleaner];
+        }
         if (current.label) {
             [actions addObject:[UIAction actionWithTitle:WQLocalizedNullable(@"Copy Identifier") image:[UIImage systemImageNamed:@"tag"]
                                               identifier:nil handler:^(UIAction *__unused a) {

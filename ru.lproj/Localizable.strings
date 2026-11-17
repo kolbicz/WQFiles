@@ -1122,3 +1122,15 @@
 "The ZIP doesn't contain an inspector: manifest.json must be at its top or inside its one folder." = "В ZIP нет инспектора: manifest.json должен лежать на верхнем уровне или в его единственной папке.";
 "The installed inspector can't be replaced: %s" = "Не удаётся заменить установленный инспектор: %s";
 "The inspector can't be installed: %s" = "Не удаётся установить инспектор: %s";
+"Add to Cache Cleaner" = "Добавить в очистку кэша";
+"Remove from Cache Cleaner" = "Убрать из очистки кэша";
+"Removed from Cache Cleaner" = "Убрано из очистки кэша";
+"%@ is no longer offered in the Cache Cleaner. Nothing was deleted." = "%@ больше не предлагается в очистке кэша. Ничего не удалено.";
+"Not Added" = "Не добавлено";
+"The app this folder belongs to can't be identified, so it can't be added." = "Не удаётся определить приложение, которому принадлежит эта папка, поэтому её нельзя добавить.";
+"The Cache Cleaner will offer to empty “%@” of %@ (the folder itself stays)." = "Очистка кэша предложит очистить «%@» приложения %@ (сама папка останется).";
+"The Cache Cleaner will offer to delete “%@” of %@." = "Очистка кэша предложит удалить «%@» приложения %@.";
+"Add to Cache Cleaner?" = "Добавить в очистку кэша?";
+"It's never selected by default; you choose it there each time. Only add what the app can do without: anything it keeps there (drafts, downloads, logins) is gone once cleaned." = "Это никогда не выбирается по умолчанию — вы выбираете это там каждый раз. Добавляйте только то, без чего приложение обойдётся: всё, что оно там хранит (черновики, загрузки, входы), после очистки пропадёт.";
+"Added by you · %@" = "Добавлено вами · %@";
+"Show in File Browser" = "Показать в файловом браузере";

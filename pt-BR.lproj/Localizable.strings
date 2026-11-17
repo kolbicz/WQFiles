@@ -1122,3 +1122,15 @@
 "The ZIP doesn't contain an inspector: manifest.json must be at its top or inside its one folder." = "O ZIP não contém um inspetor: manifest.json deve estar no nível superior ou dentro da sua única pasta.";
 "The installed inspector can't be replaced: %s" = "Não é possível substituir o inspetor instalado: %s";
 "The inspector can't be installed: %s" = "Não é possível instalar o inspetor: %s";
+"Add to Cache Cleaner" = "Adicionar à Limpeza de cache";
+"Remove from Cache Cleaner" = "Remover da Limpeza de cache";
+"Removed from Cache Cleaner" = "Removido da Limpeza de cache";
+"%@ is no longer offered in the Cache Cleaner. Nothing was deleted." = "%@ não é mais oferecido na Limpeza de cache. Nada foi apagado.";
+"Not Added" = "Não adicionado";
+"The app this folder belongs to can't be identified, so it can't be added." = "Não é possível identificar o app ao qual esta pasta pertence, então ela não pode ser adicionada.";
+"The Cache Cleaner will offer to empty “%@” of %@ (the folder itself stays)." = "A Limpeza de cache oferecerá esvaziar “%@” de %@ (a pasta em si permanece).";
+"The Cache Cleaner will offer to delete “%@” of %@." = "A Limpeza de cache oferecerá apagar “%@” de %@.";
+"Add to Cache Cleaner?" = "Adicionar à Limpeza de cache?";
+"It's never selected by default; you choose it there each time. Only add what the app can do without: anything it keeps there (drafts, downloads, logins) is gone once cleaned." = "Nunca é selecionado por padrão; você escolhe lá a cada vez. Adicione apenas o que o app pode dispensar: o que ele guarda ali (rascunhos, downloads, logins) é perdido após a limpeza.";
+"Added by you · %@" = "Adicionado por você · %@";
+"Show in File Browser" = "Mostrar no navegador de arquivos";

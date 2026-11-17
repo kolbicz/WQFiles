@@ -106,8 +106,14 @@ new files.
   `tmp` is intentionally ephemeral: clear removes it, but app
   backups do not include it and restore leaves the current `tmp` untouched.
 - **Cache Cleaner**: cache and temp size per app, with search, Select All /
-  None / Large Caches (50 MB+) and crash logs. Long-press an app to jump to its
-  Caches, tmp or data folder.
+  Invert / None / Large Caches (50 MB+) and crash logs. Long-press an app to
+  jump to its Caches, tmp or data folder. **Your own folders and files:**
+  long-press one inside an app's data (for example Instagram's
+  `Library/Application Support/Instagram/VideoUpload`, which keeps uploaded
+  videos) → **Add to Cache Cleaner**. It then appears there as "Added by you":
+  never selected by default and left out of Select All, a folder is emptied,
+  a file deleted. Stored by app, so it keeps working after the app moves to a
+  new container. Long-press it in the Cache Cleaner to remove it from the list.
 - **Files**: browse, read and share files; each opens in the fitting tool,
   and **Open As** switches between them. Saving writes back in place (same
   inode, owner and attributes). Create folders, import files (several at

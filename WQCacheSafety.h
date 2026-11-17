@@ -75,4 +75,41 @@ static inline BOOL WQCacheSafetyTargetMatchesContainer(NSString *target,
     return [canonicalTarget isEqualToString:canonicalExpected];
 }
 
+// Custom Cache Cleaner targets (added from the file browser): a path relative
+// to an app's data container, at least two components deep, under Library,
+// Documents or tmp, never ./.. and never the folders with the app's settings.
+static inline BOOL WQCacheCustomRelativeValid(NSString *relative)
+{
+    if (![relative isKindOfClass:NSString.class] || !relative.length || [relative hasPrefix:@"/"]) return NO;
+    NSArray<NSString *> *parts = [relative componentsSeparatedByString:@"/"];
+    if (parts.count < 2) return NO;
+    for (NSString *part in parts)
+        if (!part.length || [part isEqualToString:@"."] || [part isEqualToString:@".."] ||
+            [part rangeOfString:@"\0"].location != NSNotFound) return NO;
+    if (![@[@"Library", @"Documents", @"tmp"] containsObject:parts[0]]) return NO;
+    if ([parts[0] isEqualToString:@"Library"] &&
+        [@[@"Preferences", @"SyncedPreferences", @"Cookies", @"Saved Application State"] containsObject:parts[1]]) return NO;
+    return YES;
+}
+
+// The app data container and relative path of `path`
+// (/private/var/mobile/Containers/Data/Application/<UUID>/<relative>), or nil
+// when it isn't a valid custom target.
+static inline NSString *WQCacheCustomRelativeForPath(NSString *path, NSString **container)
+{
+    NSString *p = [path stringByStandardizingPath];
+    if ([p hasPrefix:@"/var/"]) p = [@"/private" stringByAppendingString:p];
+    NSString *base = @"/private/var/mobile/Containers/Data/Application/";
+    if (![p hasPrefix:base]) return nil;
+    NSString *rest = [p substringFromIndex:base.length];
+    NSRange slash = [rest rangeOfString:@"/"];
+    if (slash.location == NSNotFound) return nil;
+    NSString *uuid = [rest substringToIndex:slash.location];
+    if (![[NSUUID alloc] initWithUUIDString:uuid]) return nil;
+    NSString *relative = [rest substringFromIndex:NSMaxRange(slash)];
+    if (!WQCacheCustomRelativeValid(relative)) return nil;
+    if (container) *container = [base stringByAppendingString:uuid];
+    return relative;
+}
+
 #endif

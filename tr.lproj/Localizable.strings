@@ -1122,3 +1122,15 @@
 "The ZIP doesn't contain an inspector: manifest.json must be at its top or inside its one folder." = "ZIP bir denetleyici içermiyor: manifest.json en üst düzeyde veya tek klasörünün içinde olmalı.";
 "The installed inspector can't be replaced: %s" = "Yüklü denetleyici değiştirilemiyor: %s";
 "The inspector can't be installed: %s" = "Denetleyici yüklenemiyor: %s";
+"Add to Cache Cleaner" = "Önbellek Temizleyici'ye Ekle";
+"Remove from Cache Cleaner" = "Önbellek Temizleyici'den Kaldır";
+"Removed from Cache Cleaner" = "Önbellek Temizleyici'den kaldırıldı";
+"%@ is no longer offered in the Cache Cleaner. Nothing was deleted." = "%@ artık Önbellek Temizleyici'de sunulmuyor. Hiçbir şey silinmedi.";
+"Not Added" = "Eklenmedi";
+"The app this folder belongs to can't be identified, so it can't be added." = "Bu klasörün ait olduğu uygulama belirlenemiyor, bu yüzden eklenemez.";
+"The Cache Cleaner will offer to empty “%@” of %@ (the folder itself stays)." = "Önbellek Temizleyici, “%@” klasörünü (%@) boşaltmayı önerecek (klasörün kendisi kalır).";
+"The Cache Cleaner will offer to delete “%@” of %@." = "Önbellek Temizleyici, “%@” dosyasını (%@) silmeyi önerecek.";
+"Add to Cache Cleaner?" = "Önbellek Temizleyici'ye eklensin mi?";
+"It's never selected by default; you choose it there each time. Only add what the app can do without: anything it keeps there (drafts, downloads, logins) is gone once cleaned." = "Varsayılan olarak hiçbir zaman seçilmez; her seferinde orada siz seçersiniz. Yalnızca uygulamanın vazgeçebileceği şeyleri ekleyin: orada sakladıkları (taslaklar, indirmeler, oturumlar) temizlendikten sonra gider.";
+"Added by you · %@" = "Sizin eklediğiniz · %@";
+"Show in File Browser" = "Dosya Tarayıcısında Göster";

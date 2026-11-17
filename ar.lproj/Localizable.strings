@@ -1118,3 +1118,15 @@
 "The ZIP doesn't contain an inspector: manifest.json must be at its top or inside its one folder." = "لا يحتوي ملف ZIP على فاحص: يجب أن يكون manifest.json في المستوى الأعلى أو داخل مجلده الوحيد.";
 "The installed inspector can't be replaced: %s" = "يتعذّر استبدال الفاحص المثبّت: %s";
 "The inspector can't be installed: %s" = "يتعذّر تثبيت الفاحص: %s";
+"Add to Cache Cleaner" = "إضافة إلى منظّف ذاكرة التخزين المؤقت";
+"Remove from Cache Cleaner" = "إزالة من منظّف ذاكرة التخزين المؤقت";
+"Removed from Cache Cleaner" = "أُزيل من منظّف ذاكرة التخزين المؤقت";
+"%@ is no longer offered in the Cache Cleaner. Nothing was deleted." = "لم يعد %@ معروضًا في منظّف ذاكرة التخزين المؤقت. لم يُحذف شيء.";
+"Not Added" = "لم تتم الإضافة";
+"The app this folder belongs to can't be identified, so it can't be added." = "تعذّر تحديد التطبيق الذي ينتمي إليه هذا المجلد، لذا لا يمكن إضافته.";
+"The Cache Cleaner will offer to empty “%@” of %@ (the folder itself stays)." = "سيعرض منظّف ذاكرة التخزين المؤقت إفراغ “%@” الخاص بـ %@ (يبقى المجلد نفسه).";
+"The Cache Cleaner will offer to delete “%@” of %@." = "سيعرض منظّف ذاكرة التخزين المؤقت حذف “%@” الخاص بـ %@.";
+"Add to Cache Cleaner?" = "هل تريد الإضافة إلى منظّف ذاكرة التخزين المؤقت؟";
+"It's never selected by default; you choose it there each time. Only add what the app can do without: anything it keeps there (drafts, downloads, logins) is gone once cleaned." = "لا يُحدَّد افتراضيًا أبدًا؛ تختاره هناك في كل مرة. أضف فقط ما يستغني عنه التطبيق: ما يحفظه هناك (المسودات والتنزيلات وتسجيلات الدخول) يضيع بعد التنظيف.";
+"Added by you · %@" = "أضفته أنت · %@";
+"Show in File Browser" = "عرض في مستعرض الملفات";
