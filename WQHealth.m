@@ -64,6 +64,10 @@ static NSArray<NSString *> *wq_health_sample(NSArray<NSString *> *containers, NS
 
 static NSString *wq_health_build(void)
 {
+#if TARGET_OS_SIMULATOR
+    // The simulator reports the Mac's build (e.g. 26B131), not an iOS one.
+    return @"";
+#endif
     char build[32] = {0};
     size_t len = sizeof build - 1;
     return sysctlbyname("kern.osversion", build, &len, NULL, 0) == 0 ? @(build) : @"";
