@@ -4079,6 +4079,86 @@ static NSString *const kSystemGroupRoot = @"/private/var/containers/Shared/Syste
 
 @end
 
+#pragma mark - Touch trace (debug builds, #70)
+
+// Built with WQ_EXTRA_CFLAGS=-DWQ_TOUCH_TRACE=1 only: every touch, the view it
+// landed on and the screen around it go to the Log, to find what swallows
+// taps on a reporter's device. Off (compiled out) in normal releases.
+#ifndef WQ_TOUCH_TRACE
+#define WQ_TOUCH_TRACE 0
+#endif
+
+#if WQ_TOUCH_TRACE
+static void wq_trace(NSString *format, ...) NS_FORMAT_FUNCTION(1, 2);
+static void wq_trace(NSString *format, ...)
+{
+    static NSUInteger lines;
+    if (++lines > 1500) return;
+    va_list args;
+    va_start(args, format);
+    NSString *line = [[NSString alloc] initWithFormat:format arguments:args];
+    va_end(args);
+    wq_log(@"trace: %@", line);
+}
+
+static NSString *wq_trace_rect(CGRect r)
+{
+    return [NSString stringWithFormat:@"(%.0f,%.0f %.0fx%.0f)", r.origin.x, r.origin.y, r.size.width, r.size.height];
+}
+
+// A view as "Class(frame in window) < Parent < … @ ViewController".
+static NSString *wq_trace_view(UIView *view)
+{
+    if (!view) return @"nil";
+    NSMutableArray *chain = [NSMutableArray new];
+    UIView *v = view;
+    for (int i = 0; v && i < 6; i++, v = v.superview) [chain addObject:NSStringFromClass(v.class)];
+    NSString *frame = view.window ? wq_trace_rect([view convertRect:view.bounds toView:nil]) : @"(no window)";
+    UIResponder *r = view;
+    while (r && ![r isKindOfClass:UIViewController.class]) r = r.nextResponder;
+    return [NSString stringWithFormat:@"%@%@ @ %@", [chain componentsJoinedByString:@" < "], frame,
+            r ? NSStringFromClass(r.class) : @"?"];
+}
+
+@interface WQTraceWindow : UIWindow
+@end
+
+@implementation WQTraceWindow
+- (void)sendEvent:(UIEvent *)event
+{
+    if (event.type == UIEventTypeTouches) {
+        for (UITouch *t in event.allTouches) {
+            if (t.phase != UITouchPhaseBegan && t.phase != UITouchPhaseEnded && t.phase != UITouchPhaseCancelled) continue;
+            CGPoint p = [t locationInView:self];
+            NSString *phase = t.phase == UITouchPhaseBegan ? @"down" : t.phase == UITouchPhaseEnded ? @"up" : @"cancelled";
+            NSString *type = t.type == UITouchTypeDirect ? @"finger" : t.type == UITouchTypeIndirectPointer ? @"pointer" : @"other";
+            wq_trace(@"touch %@ (%@) at (%.0f,%.0f) on %@", phase, type, p.x, p.y, wq_trace_view(t.view));
+        }
+    }
+    [super sendEvent:event];
+}
+@end
+
+// The navigation bar and anything of it reaching below its bottom edge.
+static void wq_trace_navigation_bar(UINavigationController *nav, NSString *when)
+{
+    UINavigationBar *bar = nav.navigationBar;
+    CGRect barFrame = [bar convertRect:bar.bounds toView:nil];
+    wq_trace(@"%@: nav bar %@ top %@ depth %lu", when, wq_trace_rect(barFrame),
+             NSStringFromClass(nav.topViewController.class), (unsigned long)nav.viewControllers.count);
+    NSMutableArray *queue = [NSMutableArray arrayWithObject:bar];
+    NSUInteger seen = 0;
+    while (queue.count && seen < 400) {
+        UIView *v = queue.firstObject; [queue removeObjectAtIndex:0]; seen++;
+        for (UIView *sub in v.subviews) [queue addObject:sub];
+        if (v == bar || v.hidden || v.alpha < 0.01 || !v.userInteractionEnabled) continue;
+        CGRect f = [v convertRect:v.bounds toView:nil];
+        if (CGRectGetMaxY(f) > CGRectGetMaxY(barFrame) + 1 && f.size.height > 1)
+            wq_trace(@"%@: below the bar: %@", when, wq_trace_view(v));
+    }
+}
+#endif
+
 #pragma mark - Navigation
 
 // Adds a Home button next to Back on screens two or more levels deep. Editors
@@ -4129,6 +4209,14 @@ static NSString *const kSystemGroupRoot = @"/private/var/containers/Shared/Syste
     vc.navigationItem.leftItemsSupplementBackButton = YES;
     vc.navigationItem.leftBarButtonItem = home;
 }
+
+#if WQ_TOUCH_TRACE
+- (void)navigationController:(UINavigationController *)nav didShowViewController:(UIViewController *)vc animated:(BOOL)animated
+{
+    (void)animated;
+    wq_trace_navigation_bar(nav, [NSString stringWithFormat:@"shown %@ \"%@\"", NSStringFromClass(vc.class), vc.title ?: @""]);
+}
+#endif
 
 - (BOOL)gestureRecognizerShouldBegin:(UIGestureRecognizer *)gestureRecognizer
 {
@@ -6338,8 +6426,36 @@ static NSString *const kWQTroubleshootingFooter =
     return cell;
 }
 
+#if WQ_TOUCH_TRACE
+- (void)viewDidAppear:(BOOL)animated
+{
+    [super viewDidAppear:animated];
+    UITableView *t = self.tableView;
+    for (NSInteger row = 0; row < 3; row++) {
+        CGRect r = [t convertRect:[t rectForRowAtIndexPath:[NSIndexPath indexPathForRow:row inSection:0]] toView:nil];
+        UIView *hit = [self.view.window hitTest:CGPointMake(CGRectGetMidX(r), CGRectGetMidY(r)) withEvent:nil];
+        wq_trace(@"backups appeared: row %ld at %@ is hit by %@", (long)row, wq_trace_rect(r), wq_trace_view(hit));
+    }
+    UIEdgeInsets i = t.adjustedContentInset;
+    wq_trace(@"backups appeared: table %@ offset %.0f inset top %.0f", wq_trace_rect([t convertRect:t.bounds toView:nil]),
+             t.contentOffset.y, i.top);
+    if (self.navigationController) wq_trace_navigation_bar(self.navigationController, @"backups appeared");
+}
+
+- (void)tableView:(UITableView *)tableView didHighlightRowAtIndexPath:(NSIndexPath *)indexPath
+{
+    (void)tableView;
+    wq_trace(@"backups: row %ld highlighted", (long)indexPath.row);
+}
+#endif
+
 - (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath
 {
+#if WQ_TOUCH_TRACE
+    wq_trace(@"backups: row %ld selected; pushing (nav %@, top %@, transitioning %d)", (long)indexPath.row,
+             self.navigationController ? @"yes" : @"NO", NSStringFromClass(self.navigationController.topViewController.class),
+             self.navigationController.transitionCoordinator != nil);
+#endif
     [tableView deselectRowAtIndexPath:indexPath animated:YES];
     if (indexPath.row == 0) {
         [NSFileManager.defaultManager createDirectoryAtPath:wq_app_backup_root() withIntermediateDirectories:YES attributes:nil error:nil];
@@ -7182,7 +7298,13 @@ static UIViewController *wq_top_view_controller(void);
 
 - (void)scene:(UIScene *)scene willConnectToSession:(UISceneSession *)session options:(UISceneConnectionOptions *)options
 {
+#if WQ_TOUCH_TRACE
+    UIWindow *window = [[WQTraceWindow alloc] initWithWindowScene:(UIWindowScene *)scene];
+    wq_trace(@"touch trace on; LiveContainer %@; AssistiveTouch %@", getenv("LC_HOME_PATH") ? @"yes" : @"no",
+             UIAccessibilityIsAssistiveTouchRunning() ? @"on" : @"off");
+#else
     UIWindow *window = [[UIWindow alloc] initWithWindowScene:(UIWindowScene *)scene];
+#endif
     window.rootViewController = wq_make_root_view_controller();
     [window makeKeyAndVisible];
     self.window = window;
