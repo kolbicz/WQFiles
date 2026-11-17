@@ -25,7 +25,7 @@ def read_table(path: Path) -> dict[str, str]:
     return entries
 
 
-LANGUAGES = ("zh-Hans", "de", "ar", "it", "es", "ko", "pt-BR", "ru", "pl", "tr", "th", "vi")
+LANGUAGES = ("zh-Hans", "de", "ar", "it", "es", "ko", "pt-BR", "ru", "pl", "tr", "th", "vi", "ja")
 # Embeddings, overrides and isolates can hide or reorder text; the plain
 # LRM/RLM marks are allowed (Arabic uses LRM before a path like /private/var).
 BIDI_CONTROLS = re.compile("[\u202a-\u202e\u2066-\u2069]")

@@ -25,7 +25,7 @@ don't: iOS 26 hands WQ Files only placeholder icons and doesn't let it read
 other apps' bundles, so apps show symbol tiles.
 
 WQ Files is available in English, German, Italian, Spanish, Portuguese
-(Brazil), Russian, Polish, Turkish, Thai, Vietnamese, Korean, Arabic and Simplified Chinese. It follows
+(Brazil), Russian, Polish, Turkish, Thai, Vietnamese, Korean, Arabic, Japanese and Simplified Chinese. It follows
 the device language; **Language** in WQ Files' Settings picks another, used
 from the next start.
 
@@ -415,7 +415,7 @@ concurrent writes still require supported-device validation.
 ## Translations
 
 WQ Files is in English, German, Italian, Spanish, Portuguese (Brazil), Russian, Polish, Turkish, Thai,
-Vietnamese, Korean, Arabic and Simplified Chinese. New languages and corrections are welcome as pull requests:
+Vietnamese, Korean, Arabic, Japanese and Simplified Chinese. New languages and corrections are welcome as pull requests:
 
 - **Correct a translation:** edit the line in `<language>.lproj/Localizable.strings`
   (for example `it.lproj`). The English text on the left is the key; change
@@ -429,7 +429,7 @@ Vietnamese, Korean, Arabic and Simplified Chinese. New languages and corrections
   English text, and leave paths, file names and `WQ Files` as they are.
   `python3 -m unittest tests.test_localization` checks this.
 
-German, Italian, Spanish, Portuguese, Polish, Turkish and Thai, and the newest Chinese, Arabic and Korean strings, are
+German, Italian, Spanish, Portuguese, Polish, Turkish and Thai, and the newest Chinese, Arabic, Korean and Japanese strings, are
 machine translations so far: corrections from native speakers are especially
 welcome.
 

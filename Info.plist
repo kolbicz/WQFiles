@@ -66,6 +66,7 @@
 		<string>tr</string>
 		<string>th</string>
 		<string>vi</string>
+		<string>ja</string>
 	</array>
 	<key>CFBundleName</key>
 	<string>WQFiles</string>

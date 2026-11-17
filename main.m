@@ -4103,7 +4103,8 @@ static UIImage *wq_language_flag(NSString *code)
     static dispatch_once_t once;
     dispatch_once(&once, ^{
         regions = @{ @"en": @"GB", @"de": @"DE", @"it": @"IT", @"es": @"ES", @"pt-BR": @"BR", @"pl": @"PL",
-                     @"ru": @"RU", @"ko": @"KR", @"zh-Hans": @"CN", @"ar": @"SA", @"tr": @"TR", @"th": @"TH", @"vi": @"VN" };
+                     @"ru": @"RU", @"ko": @"KR", @"zh-Hans": @"CN", @"ar": @"SA", @"tr": @"TR", @"th": @"TH", @"vi": @"VN",
+                     @"ja": @"JP" };
         images = [NSCache new];
     });
     NSString *region = regions[code];
@@ -6929,6 +6930,9 @@ static NSString *wq_duration_text(double seconds)
 
 static NSString *wq_count_text(int64_t n)
 {
+    // Japanese counts in 万 (10,000); "%.0f million" would read "2 百万".
+    if (n >= 1000000 && [NSBundle.mainBundle.preferredLocalizations.firstObject hasPrefix:@"ja"])
+        return [NSString stringWithFormat:@"%.0f万", n / 1e4];
     if (n >= 1000000) return WQLocalizedFormat(@"%.0f million", n / 1e6);
     return [NSNumberFormatter localizedStringFromNumber:@(n) numberStyle:NSNumberFormatterDecimalStyle];
 }
