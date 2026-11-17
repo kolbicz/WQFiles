@@ -4166,7 +4166,9 @@ static void wq_trace_navigation_bar(UINavigationController *nav, NSString *when)
 @interface WQNavigationController : UINavigationController <UINavigationControllerDelegate, UIGestureRecognizerDelegate>
 @end
 
-@implementation WQNavigationController
+@implementation WQNavigationController {
+    NSUInteger _shownDepth;   // stack depth at the last didShow, to tell a step back
+}
 
 - (void)viewDidLoad
 {
@@ -4230,10 +4232,37 @@ static void wq_pass_through_edge_effects(UIView *root)
     }
 }
 
+// After a step back, iOS 27 can also keep drawing that band at the taller
+// height (#70). Hiding and showing the screen's top edge effect once makes
+// UIKit lay it out again for this screen's own navigation bar.
+static void wq_refresh_top_edge_effect(UIViewController *vc)
+{
+    UIScrollView *scroll = [vc.view isKindOfClass:UIScrollView.class] ? (UIScrollView *)vc.view : nil;
+    for (UIView *v in vc.view.subviews) if (!scroll && [v isKindOfClass:UIScrollView.class]) scroll = (UIScrollView *)v;
+    if (!scroll || scroll.topEdgeEffect.hidden) return;
+    scroll.topEdgeEffect.hidden = YES;
+    __weak UIScrollView *weakScroll = scroll;
+    __weak UIViewController *weakVC = vc;
+    dispatch_async(dispatch_get_main_queue(), ^{
+        weakScroll.topEdgeEffect.hidden = NO;
+        [weakScroll setNeedsLayout];
+        [weakScroll layoutIfNeeded];
+        wq_pass_through_edge_effects(weakVC.view);   // a new band takes touches again
+#if WQ_TOUCH_TRACE
+        for (UIView *v in weakScroll.subviews)
+            for (UIView *w in [@[v] arrayByAddingObjectsFromArray:v.subviews])
+                if ([NSStringFromClass(w.class) containsString:@"ScrollEdgeEffect"])
+                    wq_trace(@"edge effect after refresh: %@ touches %@", wq_trace_view(w), w.userInteractionEnabled ? @"on" : @"off");
+#endif
+    });
+}
+
 - (void)navigationController:(UINavigationController *)nav didShowViewController:(UIViewController *)vc animated:(BOOL)animated
 {
     (void)animated;
     wq_pass_through_edge_effects(vc.view);
+    if (nav.viewControllers.count < _shownDepth) wq_refresh_top_edge_effect(vc);
+    _shownDepth = nav.viewControllers.count;
 #if WQ_TOUCH_TRACE
     wq_trace_navigation_bar(nav, [NSString stringWithFormat:@"shown %@ \"%@\"", NSStringFromClass(vc.class), vc.title ?: @""]);
 #else
