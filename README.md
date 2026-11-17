@@ -205,8 +205,13 @@ WQ Files ships only the runtime; the inspectors are yours. Long-press a file →
 **Open As → Custom Inspector…**. When one inspector matches the file's
 extension it opens directly, otherwise you pick one.
 
-Put one folder per inspector into WQ Files' **Inspectors** folder (Documents/Inspectors,
-also in the Files app under On My iPhone → WQ Files):
+**Installing:** open a `.zip` holding an inspector with WQ Files (share sheet,
+AirDrop or the Files app → Share → WQ Files): it is checked and installed,
+and installing one with the same name again updates it. Or copy the folder
+into WQ Files' **Inspectors** folder yourself: **Settings → Inspectors** (in
+the classic design under Tools) opens it, with Import Folder / Import Files in
+its ⋯ menu, and the Files app shows it under On My iPhone → WQ Files. One
+folder per inspector:
 
 ```
 Inspectors/

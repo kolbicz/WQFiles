@@ -1108,3 +1108,13 @@
 "manifest.json needs \"extensions\", for example [\"json\"] or [\"*\"]." = "يحتاج manifest.json إلى \"extensions\"، مثل [\"json\"] أو [\"*\"].";
 "manifest.json needs a \"name\" of 1 to 80 characters." = "يحتاج manifest.json إلى \"name\" من 1 إلى 80 حرفًا.";
 "\"title\" must be a string." = "يجب أن يكون \"title\" سلسلة نصية.";
+"None" = "لا شيء";
+"Inspector Installed" = "ثُبّت الفاحص";
+"Inspector Updated" = "حُدّث الفاحص";
+"Not an Inspector" = "ليس فاحصًا";
+"“%@” is ready. Long-press a file and choose Open As → Custom Inspector… to use it." = "“%@” جاهز. اضغط مطولًا على ملف واختر فتح باسم → فاحص مخصص… لاستخدامه.";
+"The Inspectors folder can't be written." = "تتعذّر الكتابة في مجلد Inspectors.";
+"The ZIP can't be unpacked: %@" = "يتعذّر فك ضغط ملف ZIP: %@";
+"The ZIP doesn't contain an inspector: manifest.json must be at its top or inside its one folder." = "لا يحتوي ملف ZIP على فاحص: يجب أن يكون manifest.json في المستوى الأعلى أو داخل مجلده الوحيد.";
+"The installed inspector can't be replaced: %s" = "يتعذّر استبدال الفاحص المثبّت: %s";
+"The inspector can't be installed: %s" = "يتعذّر تثبيت الفاحص: %s";

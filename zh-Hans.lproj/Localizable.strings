@@ -1112,3 +1112,13 @@
 "manifest.json needs \"extensions\", for example [\"json\"] or [\"*\"]." = "manifest.json 需要 \"extensions\"，例如 [\"json\"] 或 [\"*\"]。";
 "manifest.json needs a \"name\" of 1 to 80 characters." = "manifest.json 需要 1 到 80 个字符的 \"name\"。";
 "\"title\" must be a string." = "\"title\" 必须是字符串。";
+"None" = "无";
+"Inspector Installed" = "已安装检查器";
+"Inspector Updated" = "已更新检查器";
+"Not an Inspector" = "不是检查器";
+"“%@” is ready. Long-press a file and choose Open As → Custom Inspector… to use it." = "“%@”已就绪。按住一个文件并选择“打开方式”→“自定义检查器…”即可使用。";
+"The Inspectors folder can't be written." = "无法写入 Inspectors 文件夹。";
+"The ZIP can't be unpacked: %@" = "无法解压该 ZIP：%@";
+"The ZIP doesn't contain an inspector: manifest.json must be at its top or inside its one folder." = "该 ZIP 不包含检查器：manifest.json 必须位于顶层或其唯一的文件夹中。";
+"The installed inspector can't be replaced: %s" = "无法替换已安装的检查器：%s";
+"The inspector can't be installed: %s" = "无法安装检查器：%s";

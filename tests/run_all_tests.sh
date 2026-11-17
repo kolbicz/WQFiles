@@ -92,7 +92,7 @@ compile_run WQMediaStreamTests WQMediaStream.m tests/WQMediaStreamTests.m -frame
 compile_run WQSQLiteSaveTests WQLocalization.m WQCore.m tests/WQSQLiteSaveTests.m -lsqlite3
 compile_run WQSQLiteSupportTests WQLocalization.m tests/WQSQLiteSupportTests.m -lsqlite3
 compile_run WQTrashTests WQLocalization.m WQCore.m tests/WQTrashTests.m -lsqlite3
-compile_run WQInspectorTests WQLocalization.m WQInspector.m tests/WQInspectorTests.m -framework JavaScriptCore
+compile_run WQInspectorTests WQLocalization.m WQArchive.m WQInspector.m tests/WQInspectorTests.m -framework JavaScriptCore -lz
 compile_run WQLaunchServicesTests -DWQ_LS_TESTING WQLaunchServices.m WQLocalization.m tests/WQLaunchServicesTests.m
 
 printf '\n== WQLocalizationTests (runtime, all languages) ==\n'

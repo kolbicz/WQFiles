@@ -1112,3 +1112,13 @@
 "manifest.json needs \"extensions\", for example [\"json\"] or [\"*\"]." = "manifest.json cần \"extensions\", ví dụ [\"json\"] hoặc [\"*\"].";
 "manifest.json needs a \"name\" of 1 to 80 characters." = "manifest.json cần \"name\" dài từ 1 đến 80 ký tự.";
 "\"title\" must be a string." = "\"title\" phải là chuỗi.";
+"None" = "Không có";
+"Inspector Installed" = "Đã cài trình kiểm tra";
+"Inspector Updated" = "Đã cập nhật trình kiểm tra";
+"Not an Inspector" = "Không phải trình kiểm tra";
+"“%@” is ready. Long-press a file and choose Open As → Custom Inspector… to use it." = "“%@” đã sẵn sàng. Nhấn giữ một tệp và chọn Mở bằng → Trình kiểm tra tùy chỉnh… để dùng.";
+"The Inspectors folder can't be written." = "Không ghi được vào thư mục Inspectors.";
+"The ZIP can't be unpacked: %@" = "Không giải nén được ZIP: %@";
+"The ZIP doesn't contain an inspector: manifest.json must be at its top or inside its one folder." = "ZIP không chứa trình kiểm tra: manifest.json phải nằm ở cấp trên cùng hoặc trong thư mục duy nhất của nó.";
+"The installed inspector can't be replaced: %s" = "Không thay thế được trình kiểm tra đã cài: %s";
+"The inspector can't be installed: %s" = "Không cài được trình kiểm tra: %s";

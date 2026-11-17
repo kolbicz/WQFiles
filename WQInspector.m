@@ -8,6 +8,7 @@
 
 #import "WQInspector.h"
 #import "WQLocalization.h"
+#import "WQArchive.h"
 #import <JavaScriptCore/JavaScriptCore.h>
 #include <dlfcn.h>
 #include <sys/stat.h>
@@ -140,6 +141,86 @@ NSArray<WQInspector *> *wq_inspectors_in(NSString *folder, NSArray<NSString *> *
     [found sortUsingComparator:^NSComparisonResult(WQInspector *a, WQInspector *b) { return [a.name localizedStandardCompare:b.name]; }];
     if (problems) *problems = skipped;
     return found;
+}
+
+#pragma mark - Installing
+
+static BOOL wq_inspector_has_manifest(NSString *dir)
+{
+    struct stat st;
+    return lstat([dir stringByAppendingPathComponent:@"manifest.json"].fileSystemRepresentation, &st) == 0 && S_ISREG(st.st_mode);
+}
+
+// A folder name from the inspector's name: no path separators, no leading dot.
+static NSString *wq_inspector_folder_name(NSString *name)
+{
+    NSMutableString *clean = [[[name componentsSeparatedByCharactersInSet:[NSCharacterSet characterSetWithCharactersInString:@"/:\\"]]
+                                componentsJoinedByString:@"-"] mutableCopy];
+    while ([clean hasPrefix:@"."]) [clean deleteCharactersInRange:NSMakeRange(0, 1)];
+    NSString *trimmed = [clean stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet];
+    return trimmed.length ? trimmed : @"Inspector";
+}
+
+WQInspector *wq_inspector_install_zip(NSString *zipPath, NSString *folder, BOOL *replaced, NSString **error)
+{
+    if (replaced) *replaced = NO;
+    NSFileManager *fm = NSFileManager.defaultManager;
+    [fm createDirectoryAtPath:folder withIntermediateDirectories:YES attributes:nil error:nil];
+    // Staged inside the Inspectors folder (same volume, so the final step is
+    // a rename); the dot keeps it out of the list.
+    NSString *stage = [folder stringByAppendingPathComponent:[@".wq-install-" stringByAppendingString:NSUUID.UUID.UUIDString]];
+    NSString *content = [stage stringByAppendingPathComponent:@"content"];
+    if (![fm createDirectoryAtPath:content withIntermediateDirectories:YES attributes:nil error:nil]) {
+        if (error) *error = WQLocalized(@"The Inspectors folder can't be written.");
+        return nil;
+    }
+    WQInspector *installed = nil;
+    NSString *problem = nil;
+    @try {
+        NSString *extractError = nil;
+        if (!wq_zip_extract(zipPath, content, wq_archive_posix_io(), 32ull * 1024 * 1024, nil, nil, NULL, NULL, &extractError)) {
+            problem = WQLocalizedFormat(@"The ZIP can't be unpacked: %@", extractError ?: @"?");
+            return nil;
+        }
+        NSString *root = nil;
+        if (wq_inspector_has_manifest(content)) root = content;
+        else {
+            NSMutableArray<NSString *> *dirs = [NSMutableArray new];
+            for (NSString *entry in [fm contentsOfDirectoryAtPath:content error:nil] ?: @[]) {
+                if ([entry hasPrefix:@"."] || [entry isEqualToString:@"__MACOSX"]) continue;
+                struct stat st;
+                NSString *path = [content stringByAppendingPathComponent:entry];
+                if (lstat(path.fileSystemRepresentation, &st) == 0 && S_ISDIR(st.st_mode)) [dirs addObject:path];
+            }
+            if (dirs.count == 1 && wq_inspector_has_manifest(dirs.firstObject)) root = dirs.firstObject;
+        }
+        if (!root) {
+            problem = WQLocalized(@"The ZIP doesn't contain an inspector: manifest.json must be at its top or inside its one folder.");
+            return nil;
+        }
+        NSString *loadError = nil;
+        WQInspector *candidate = wq_inspector_load(root, &loadError);
+        if (!candidate) { problem = loadError; return nil; }
+        NSString *destination = [folder stringByAppendingPathComponent:wq_inspector_folder_name(candidate.name)];
+        NSString *old = [stage stringByAppendingPathComponent:@"old"];
+        struct stat st;
+        BOOL hadOld = lstat(destination.fileSystemRepresentation, &st) == 0;
+        if (hadOld && rename(destination.fileSystemRepresentation, old.fileSystemRepresentation) != 0) {
+            problem = WQLocalizedFormat(@"The installed inspector can't be replaced: %s", strerror(errno));
+            return nil;
+        }
+        if (rename(root.fileSystemRepresentation, destination.fileSystemRepresentation) != 0) {
+            problem = WQLocalizedFormat(@"The inspector can't be installed: %s", strerror(errno));
+            if (hadOld) rename(old.fileSystemRepresentation, destination.fileSystemRepresentation);
+            return nil;
+        }
+        if (replaced) *replaced = hadOld;
+        installed = wq_inspector_load(destination, &problem);
+        return installed;
+    } @finally {
+        [fm removeItemAtPath:stage error:nil];
+        if (!installed && error) *error = problem ?: @"?";
+    }
 }
 
 #pragma mark - Running

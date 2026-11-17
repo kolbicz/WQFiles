@@ -1112,3 +1112,13 @@
 "manifest.json needs \"extensions\", for example [\"json\"] or [\"*\"]." = "В manifest.json нужен \"extensions\", например [\"json\"] или [\"*\"].";
 "manifest.json needs a \"name\" of 1 to 80 characters." = "В manifest.json нужен \"name\" длиной от 1 до 80 символов.";
 "\"title\" must be a string." = "\"title\" должен быть строкой.";
+"None" = "Нет";
+"Inspector Installed" = "Инспектор установлен";
+"Inspector Updated" = "Инспектор обновлён";
+"Not an Inspector" = "Это не инспектор";
+"“%@” is ready. Long-press a file and choose Open As → Custom Inspector… to use it." = "«%@» готов. Нажмите и удерживайте файл и выберите «Открыть как» → «Свой инспектор…», чтобы использовать его.";
+"The Inspectors folder can't be written." = "В папку Inspectors нельзя записать.";
+"The ZIP can't be unpacked: %@" = "Не удаётся распаковать ZIP: %@";
+"The ZIP doesn't contain an inspector: manifest.json must be at its top or inside its one folder." = "В ZIP нет инспектора: manifest.json должен лежать на верхнем уровне или в его единственной папке.";
+"The installed inspector can't be replaced: %s" = "Не удаётся заменить установленный инспектор: %s";
+"The inspector can't be installed: %s" = "Не удаётся установить инспектор: %s";

@@ -1108,3 +1108,13 @@
 "manifest.json needs \"extensions\", for example [\"json\"] or [\"*\"]." = "manifest.json には \"extensions\" が必要です（例: [\"json\"] または [\"*\"]）。";
 "manifest.json needs a \"name\" of 1 to 80 characters." = "manifest.json には 1〜80 文字の \"name\" が必要です。";
 "\"title\" must be a string." = "\"title\" は文字列である必要があります。";
+"None" = "なし";
+"Inspector Installed" = "インスペクタをインストールしました";
+"Inspector Updated" = "インスペクタを更新しました";
+"Not an Inspector" = "インスペクタではありません";
+"“%@” is ready. Long-press a file and choose Open As → Custom Inspector… to use it." = "「%@」を使用できます。ファイルを長押しして「開く形式」→「カスタムインスペクタ…」を選んでください。";
+"The Inspectors folder can't be written." = "Inspectors フォルダに書き込めません。";
+"The ZIP can't be unpacked: %@" = "ZIP を展開できません: %@";
+"The ZIP doesn't contain an inspector: manifest.json must be at its top or inside its one folder." = "ZIP にインスペクタが含まれていません。manifest.json は最上位か、唯一のフォルダ内に置く必要があります。";
+"The installed inspector can't be replaced: %s" = "インストール済みのインスペクタを置き換えられません: %s";
+"The inspector can't be installed: %s" = "インスペクタをインストールできません: %s";

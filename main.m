@@ -1627,6 +1627,44 @@ static NSString *wq_info_date(struct timespec ts)
 
 @end
 
+// Settings → Inspectors: the folder they're installed in.
+static void wq_open_inspectors_folder(UINavigationController *nav)
+{
+    [nav pushViewController:[[WQDirViewController alloc] initWithPath:wq_inspectors_folder() title:WQLocalized(@"Inspectors")] animated:YES];
+}
+
+static NSString *wq_inspectors_summary(void)
+{
+    NSUInteger n = wq_inspectors_in(wq_inspectors_folder(), NULL).count;
+    return n ? [NSNumberFormatter localizedStringFromNumber:@(n) numberStyle:NSNumberFormatterDecimalStyle] : WQLocalized(@"None");
+}
+
+// A .zip opened with WQ Files (share sheet, Files app): installed as an
+// inspector when it holds one, otherwise explained.
+static void wq_install_inspector_url(UIViewController *host, NSURL *url)
+{
+    dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
+        NSString *temp = [NSTemporaryDirectory() stringByAppendingPathComponent:[NSUUID.UUID.UUIDString stringByAppendingString:@".zip"]];
+        BOOL scoped = [url startAccessingSecurityScopedResource];
+        NSError *copyError = nil;
+        BOOL copied = [NSFileManager.defaultManager copyItemAtURL:url toURL:[NSURL fileURLWithPath:temp] error:&copyError];
+        if (scoped) [url stopAccessingSecurityScopedResource];
+        NSString *error = copied ? nil : copyError.localizedDescription;
+        BOOL replaced = NO;
+        WQInspector *inspector = copied ? wq_inspector_install_zip(temp, wq_inspectors_folder(), &replaced, &error) : nil;
+        [NSFileManager.defaultManager removeItemAtPath:temp error:nil];
+        wq_log(@"inspectors: install %@: %@", url.lastPathComponent, inspector ? inspector.folder.lastPathComponent : error);
+        dispatch_async(dispatch_get_main_queue(), ^{
+            if (!host) return;
+            if (inspector)
+                wq_alert(host, replaced ? @"Inspector Updated" : @"Inspector Installed",
+                         WQVerbatim(WQLocalizedFormat(@"“%@” is ready. Long-press a file and choose Open As → Custom Inspector… to use it.", inspector.name)));
+            else
+                wq_alert(host, @"Not an Inspector", WQVerbatim(error ?: @"?"));
+        });
+    });
+}
+
 // Open As → Custom Inspector…: the installed inspectors for this file; one
 // match opens directly, several (or none matching) ask which to use.
 static void wq_open_custom_inspector(UIViewController *host, NSString *path, UIView *source)
@@ -6075,7 +6113,7 @@ static NSString *const kWQTroubleshootingFooter =
 - (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section
 {
     // Rows 7 and 8: Background Color, and Default Colors once one is picked.
-    return section == 0 ? 8 : section == 1 ? 4 : 1;   // row 6: Show Folder Sizes, row 7: Theme
+    return section == 0 ? 8 : section == 1 ? 5 : 1;   // row 6: Show Folder Sizes, row 7: Theme; section 1 row 2: Inspectors
 }
 
 - (NSString *)tableView:(UITableView *)tableView titleForHeaderInSection:(NSInteger)section
@@ -6157,13 +6195,14 @@ static NSString *const kWQTroubleshootingFooter =
         cell.accessoryType = UITableViewCellAccessoryNone;
         return cell;
     }
-    NSArray<NSString *> *titles = @[@"Language", @"Sharing Password", @"Log", @"About"];
-    NSArray<NSString *> *symbols = @[@"globe", @"key", @"doc.plaintext", @"info.circle"];
+    NSArray<NSString *> *titles = @[@"Language", @"Sharing Password", @"Inspectors", @"Log", @"About"];
+    NSArray<NSString *> *symbols = @[@"globe", @"key", @"curlybraces", @"doc.plaintext", @"info.circle"];
     c.text = WQLocalizedNullable(titles[(NSUInteger)indexPath.row]);
     c.image = [UIImage systemImageNamed:symbols[(NSUInteger)indexPath.row]];
     if (indexPath.row == 0) c.secondaryText = wq_language_name(wq_chosen_language());
     if (indexPath.row == 1) c.secondaryText = WQLocalized(wq_sharing_password() ? @"Fixed" : @"Random each time");
-    if (indexPath.row == 3) c.secondaryText = wq_app_version_line();
+    if (indexPath.row == 2) c.secondaryText = wq_inspectors_summary();
+    if (indexPath.row == 4) c.secondaryText = wq_app_version_line();
     cell.contentConfiguration = c;
     cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
     return cell;
@@ -6184,6 +6223,8 @@ static NSString *const kWQTroubleshootingFooter =
         __weak UITableView *table = tableView;
         wq_edit_sharing_password(self, ^{ [table reloadRowsAtIndexPaths:@[indexPath] withRowAnimation:UITableViewRowAnimationNone]; });
     } else if (indexPath.row == 2) {
+        wq_open_inspectors_folder(self.navigationController);
+    } else if (indexPath.row == 3) {
         [self.navigationController pushViewController:[WQLogViewController new] animated:YES];
     } else {
         NSString *version = [NSString stringWithFormat:@"%@\n\n%@", wq_app_version_line(), WQLocalizedNullable(@"Sandbox escape: worse_query by @forcequitOS")];
@@ -6640,7 +6681,7 @@ static NSString *const kWQTroubleshootingFooter =
     // System Groups is the extra last row, on iOS 27 only.
     if (section == 3) return 1;
     if (section == 2) return 9;   // row 7: Sharing Password, row 8: Show Folder Sizes
-    return section == 0 ? (NSInteger)_locations.count + (wq_system_areas_reachable() ? 1 : 0) : 9;
+    return section == 0 ? (NSInteger)_locations.count + (wq_system_areas_reachable() ? 1 : 0) : 10;
 }
 
 - (NSString *)tableView:(UITableView *)tableView titleForHeaderInSection:(NSInteger)section
@@ -6740,7 +6781,7 @@ static NSString *const kWQTroubleshootingFooter =
         NSArray *tools = @[@[@"Apps", @"square.grid.3x3"], @[@"Cache Cleaner", @"trash"], @[@"Go to Path…", @"arrow.right.circle"],
                            @[@"App Backups", @"clock.arrow.circlepath"], @[@"Backups", @"clock.arrow.circlepath"],
                            @[@"Recently Deleted", @"trash.circle"], @[@"Log", @"doc.plaintext"], @[@"Favorites", @"star"],
-                           @[@"Recent", @"clock"]];
+                           @[@"Recent", @"clock"], @[@"Inspectors", @"curlybraces"]];
         c.text = WQLocalizedNullable(tools[(NSUInteger)indexPath.row][0]);
         c.image = [UIImage systemImageNamed:tools[(NSUInteger)indexPath.row][1]];
     }
@@ -6792,6 +6833,9 @@ static NSString *const kWQTroubleshootingFooter =
         next = [WQFavoritesViewController new];
     } else if (indexPath.row == 8) {
         next = [WQRecentsViewController new];
+    } else if (indexPath.row == 9) {
+        wq_open_inspectors_folder(self.navigationController);
+        return;
     } else {
         next = [WQLogViewController new];
     }
@@ -7103,13 +7147,17 @@ static UIViewController *wq_top_view_controller(void);
     self.window.tintColor = accent ? wq_theme_accent() : nil;
 }
 
-// A .wqtheme file opened with WQ Files (share sheet, Files app).
+// A .wqtheme or inspector .zip opened with WQ Files (share sheet, Files app).
 - (void)scene:(UIScene *)scene openURLContexts:(NSSet<UIOpenURLContext *> *)contexts
 {
     for (UIOpenURLContext *context in contexts) {
         NSURL *url = context.URL;
-        if (!url.isFileURL || ![url.pathExtension.lowercaseString isEqualToString:@"wqtheme"]) continue;
-        dispatch_async(dispatch_get_main_queue(), ^{ wq_import_theme_url(wq_top_view_controller(), url); });
+        if (!url.isFileURL) continue;
+        NSString *ext = url.pathExtension.lowercaseString;
+        if ([ext isEqualToString:@"wqtheme"])
+            dispatch_async(dispatch_get_main_queue(), ^{ wq_import_theme_url(wq_top_view_controller(), url); });
+        else if ([ext isEqualToString:@"zip"])   // a custom inspector (#45)
+            dispatch_async(dispatch_get_main_queue(), ^{ wq_install_inspector_url(wq_top_view_controller(), url); });
     }
 }
 

@@ -1112,3 +1112,13 @@
 "manifest.json needs \"extensions\", for example [\"json\"] or [\"*\"]." = "manifest.json needs \"extensions\", for example [\"json\"] or [\"*\"].";
 "manifest.json needs a \"name\" of 1 to 80 characters." = "manifest.json needs a \"name\" of 1 to 80 characters.";
 "\"title\" must be a string." = "\"title\" must be a string.";
+"None" = "None";
+"Inspector Installed" = "Inspector Installed";
+"Inspector Updated" = "Inspector Updated";
+"Not an Inspector" = "Not an Inspector";
+"“%@” is ready. Long-press a file and choose Open As → Custom Inspector… to use it." = "“%@” is ready. Long-press a file and choose Open As → Custom Inspector… to use it.";
+"The Inspectors folder can't be written." = "The Inspectors folder can't be written.";
+"The ZIP can't be unpacked: %@" = "The ZIP can't be unpacked: %@";
+"The ZIP doesn't contain an inspector: manifest.json must be at its top or inside its one folder." = "The ZIP doesn't contain an inspector: manifest.json must be at its top or inside its one folder.";
+"The installed inspector can't be replaced: %s" = "The installed inspector can't be replaced: %s";
+"The inspector can't be installed: %s" = "The inspector can't be installed: %s";

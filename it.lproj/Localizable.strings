@@ -1108,3 +1108,13 @@
 "manifest.json needs \"extensions\", for example [\"json\"] or [\"*\"]." = "manifest.json richiede \"extensions\", per esempio [\"json\"] o [\"*\"].";
 "manifest.json needs a \"name\" of 1 to 80 characters." = "manifest.json richiede un \"name\" da 1 a 80 caratteri.";
 "\"title\" must be a string." = "\"title\" deve essere una stringa.";
+"None" = "Nessuno";
+"Inspector Installed" = "Inspector installato";
+"Inspector Updated" = "Inspector aggiornato";
+"Not an Inspector" = "Non è un inspector";
+"“%@” is ready. Long-press a file and choose Open As → Custom Inspector… to use it." = "“%@” è pronto. Tieni premuto un file e scegli Apri come → Inspector personalizzato… per usarlo.";
+"The Inspectors folder can't be written." = "Impossibile scrivere nella cartella Inspectors.";
+"The ZIP can't be unpacked: %@" = "Impossibile estrarre lo ZIP: %@";
+"The ZIP doesn't contain an inspector: manifest.json must be at its top or inside its one folder." = "Lo ZIP non contiene un inspector: manifest.json deve trovarsi al livello principale o nella sua unica cartella.";
+"The installed inspector can't be replaced: %s" = "Impossibile sostituire l'inspector installato: %s";
+"The inspector can't be installed: %s" = "Impossibile installare l'inspector: %s";

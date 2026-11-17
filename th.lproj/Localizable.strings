@@ -1112,3 +1112,13 @@
 "manifest.json needs \"extensions\", for example [\"json\"] or [\"*\"]." = "manifest.json ต้องมี \"extensions\" เช่น [\"json\"] หรือ [\"*\"]";
 "manifest.json needs a \"name\" of 1 to 80 characters." = "manifest.json ต้องมี \"name\" ยาว 1 ถึง 80 ตัวอักษร";
 "\"title\" must be a string." = "\"title\" ต้องเป็นสตริง";
+"None" = "ไม่มี";
+"Inspector Installed" = "ติดตั้งตัวตรวจสอบแล้ว";
+"Inspector Updated" = "อัปเดตตัวตรวจสอบแล้ว";
+"Not an Inspector" = "ไม่ใช่ตัวตรวจสอบ";
+"“%@” is ready. Long-press a file and choose Open As → Custom Inspector… to use it." = "“%@” พร้อมใช้แล้ว กดค้างที่ไฟล์แล้วเลือก เปิดเป็น → ตัวตรวจสอบแบบกำหนดเอง… เพื่อใช้งาน";
+"The Inspectors folder can't be written." = "เขียนลงโฟลเดอร์ Inspectors ไม่ได้";
+"The ZIP can't be unpacked: %@" = "แตกไฟล์ ZIP ไม่ได้: %@";
+"The ZIP doesn't contain an inspector: manifest.json must be at its top or inside its one folder." = "ZIP ไม่มีตัวตรวจสอบ: manifest.json ต้องอยู่ที่ระดับบนสุดหรือในโฟลเดอร์เดียวของไฟล์นั้น";
+"The installed inspector can't be replaced: %s" = "แทนที่ตัวตรวจสอบที่ติดตั้งไว้ไม่ได้: %s";
+"The inspector can't be installed: %s" = "ติดตั้งตัวตรวจสอบไม่ได้: %s";

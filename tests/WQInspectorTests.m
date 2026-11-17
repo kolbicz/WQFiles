@@ -1,6 +1,7 @@
 // Custom inspectors (#45) on the host: manifests, the JavaScript contract,
 // input shapes, result checks and limits, and the time limit.
 #import "../WQInspector.h"
+#import "../WQArchive.h"
 #include <stdlib.h>
 
 static void check(BOOL ok, NSString *name)
@@ -99,6 +100,39 @@ int main(void)
         NSDate *start = NSDate.date;
         check(!run(@"function inspect(){ for(;;){} }", json, NO, &error, NULL) && error.length, @"endless loop is stopped");
         check(-start.timeIntervalSinceNow < 10, @"... within the time limit");
+
+        // Installing from a ZIP.
+        NSFileManager *fm = NSFileManager.defaultManager;
+        NSString *inspectors = [base stringByAppendingPathComponent:@"Installed"];
+        NSString *src = makeInspector(@"zip-src/Pretty Thing", @{@"name": @"Pretty/Thing", @"api": @1, @"extensions": @[@"txt"]},
+                                      @"function inspect(i){ return {sections:[{text: i.text}]} }", nil);
+        NSString *folderZip = [base stringByAppendingPathComponent:@"folder.zip"];
+        check(wq_zip_write(@[src], folderZip, wq_archive_posix_io(), nil, nil, NULL, &error), @"make a ZIP with one inspector folder");
+        BOOL replaced = YES;
+        WQInspector *installed = wq_inspector_install_zip(folderZip, inspectors, &replaced, &error);
+        check(installed && [installed.folder.lastPathComponent isEqualToString:@"Pretty-Thing"] && !replaced,
+              [@"install from a ZIP with one folder " stringByAppendingString:error ?: @""]);
+        check(wq_inspectors_in(inspectors, NULL).count == 1, @"installed inspector is listed");
+        check(wq_inspector_install_zip(folderZip, inspectors, &replaced, &error) && replaced && wq_inspectors_in(inspectors, NULL).count == 1,
+              @"installing again replaces it");
+        NSString *topZip = [base stringByAppendingPathComponent:@"top.zip"];
+        NSString *top = makeInspector(@"zip-top", @{@"name": @"Top Level", @"api": @1, @"extensions": @[@"*"]}, @"function inspect(){return {sections:[{text:'x'}]}}", nil);
+        check(wq_zip_write(@[[top stringByAppendingPathComponent:@"manifest.json"], [top stringByAppendingPathComponent:@"inspect.js"]],
+                           topZip, wq_archive_posix_io(), nil, nil, NULL, &error), @"make a ZIP with the files at its top");
+        check(wq_inspector_install_zip(topZip, inspectors, NULL, &error) && wq_inspectors_in(inspectors, NULL).count == 2,
+              @"install from a ZIP with manifest.json at the top");
+        NSString *badZip = [base stringByAppendingPathComponent:@"bad.zip"];
+        NSString *bad = makeInspector(@"zip-bad", @{@"name": @"Bad", @"api": @2, @"extensions": @[@"*"]}, @"", nil);
+        check(wq_zip_write(@[bad], badZip, wq_archive_posix_io(), nil, nil, NULL, &error), @"make a ZIP with an invalid manifest");
+        error = nil;
+        check(!wq_inspector_install_zip(badZip, inspectors, NULL, &error) && [error containsString:@"api"], @"invalid manifest is refused with the reason");
+        NSString *plainZip = [base stringByAppendingPathComponent:@"plain.zip"];
+        [@"hello" writeToFile:[base stringByAppendingPathComponent:@"hello.txt"] atomically:YES encoding:NSUTF8StringEncoding error:nil];
+        check(wq_zip_write(@[[base stringByAppendingPathComponent:@"hello.txt"]], plainZip, wq_archive_posix_io(), nil, nil, NULL, &error), @"make a ZIP without an inspector");
+        error = nil;
+        check(!wq_inspector_install_zip(plainZip, inspectors, NULL, &error) && error.length, @"a ZIP without manifest.json is refused");
+        NSArray *left = [fm contentsOfDirectoryAtPath:inspectors error:nil];
+        check(left.count == 2 && ![[left componentsJoinedByString:@","] containsString:@".wq-install"], @"refused installs leave nothing behind");
 
         [NSFileManager.defaultManager removeItemAtPath:base error:nil];
         printf("All inspector tests passed.\n");

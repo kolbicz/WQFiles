@@ -86,6 +86,14 @@ NSArray<WQInspector *> *wq_inspectors_in(NSString *folder, NSArray<NSString *> *
 // Reads one inspector folder; nil with *error when it isn't valid.
 WQInspector *_Nullable wq_inspector_load(NSString *folder, NSString *_Nullable *_Nullable error);
 
+// Installs the inspector in the ZIP at `zipPath` into `folder`: manifest.json
+// at the top of the archive or inside its one top-level folder. The folder
+// is named after the inspector; an installed one with that name is replaced
+// (*replaced). nil with *error when the ZIP holds no valid inspector; nothing
+// is left behind then.
+WQInspector *_Nullable wq_inspector_install_zip(NSString *zipPath, NSString *folder, BOOL *_Nullable replaced,
+                                                NSString *_Nullable *_Nullable error);
+
 // Runs `inspector` on `bytes` (already capped by the caller; `truncated`
 // says the file is longer). Blocking: call off the main thread. nil with
 // *error (script error, time limit, invalid result); *log gets console.log

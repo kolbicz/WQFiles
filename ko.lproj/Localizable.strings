@@ -1112,3 +1112,13 @@
 "manifest.json needs \"extensions\", for example [\"json\"] or [\"*\"]." = "manifest.json에 \"extensions\"가 필요합니다. 예: [\"json\"] 또는 [\"*\"].";
 "manifest.json needs a \"name\" of 1 to 80 characters." = "manifest.json에 1~80자의 \"name\"이 필요합니다.";
 "\"title\" must be a string." = "\"title\"은 문자열이어야 합니다.";
+"None" = "없음";
+"Inspector Installed" = "인스펙터 설치됨";
+"Inspector Updated" = "인스펙터 업데이트됨";
+"Not an Inspector" = "인스펙터가 아님";
+"“%@” is ready. Long-press a file and choose Open As → Custom Inspector… to use it." = "“%@”을(를) 사용할 수 있습니다. 파일을 길게 누르고 다음으로 열기 → 사용자 인스펙터…를 선택하세요.";
+"The Inspectors folder can't be written." = "Inspectors 폴더에 쓸 수 없습니다.";
+"The ZIP can't be unpacked: %@" = "ZIP의 압축을 풀 수 없습니다: %@";
+"The ZIP doesn't contain an inspector: manifest.json must be at its top or inside its one folder." = "ZIP에 인스펙터가 없습니다. manifest.json은 맨 위 또는 하나뿐인 폴더 안에 있어야 합니다.";
+"The installed inspector can't be replaced: %s" = "설치된 인스펙터를 바꿀 수 없습니다: %s";
+"The inspector can't be installed: %s" = "인스펙터를 설치할 수 없습니다: %s";

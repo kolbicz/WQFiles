@@ -1112,3 +1112,13 @@
 "manifest.json needs \"extensions\", for example [\"json\"] or [\"*\"]." = "manifest.json için \"extensions\" gerekli, örneğin [\"json\"] veya [\"*\"].";
 "manifest.json needs a \"name\" of 1 to 80 characters." = "manifest.json için 1 ile 80 karakter arasında bir \"name\" gerekli.";
 "\"title\" must be a string." = "\"title\" bir dize olmalı.";
+"None" = "Yok";
+"Inspector Installed" = "Denetleyici yüklendi";
+"Inspector Updated" = "Denetleyici güncellendi";
+"Not an Inspector" = "Denetleyici değil";
+"“%@” is ready. Long-press a file and choose Open As → Custom Inspector… to use it." = "“%@” hazır. Kullanmak için bir dosyaya basılı tutun ve Şununla Aç → Özel Denetleyici… seçeneğini seçin.";
+"The Inspectors folder can't be written." = "Inspectors klasörüne yazılamıyor.";
+"The ZIP can't be unpacked: %@" = "ZIP açılamıyor: %@";
+"The ZIP doesn't contain an inspector: manifest.json must be at its top or inside its one folder." = "ZIP bir denetleyici içermiyor: manifest.json en üst düzeyde veya tek klasörünün içinde olmalı.";
+"The installed inspector can't be replaced: %s" = "Yüklü denetleyici değiştirilemiyor: %s";
+"The inspector can't be installed: %s" = "Denetleyici yüklenemiyor: %s";
