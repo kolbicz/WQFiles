@@ -92,6 +92,7 @@ compile_run WQMediaStreamTests WQMediaStream.m tests/WQMediaStreamTests.m -frame
 compile_run WQSQLiteSaveTests WQLocalization.m WQCore.m tests/WQSQLiteSaveTests.m -lsqlite3
 compile_run WQSQLiteSupportTests WQLocalization.m tests/WQSQLiteSupportTests.m -lsqlite3
 compile_run WQTrashTests WQLocalization.m WQCore.m tests/WQTrashTests.m -lsqlite3
+compile_run WQInspectorTests WQLocalization.m WQInspector.m tests/WQInspectorTests.m -framework JavaScriptCore
 compile_run WQLaunchServicesTests -DWQ_LS_TESTING WQLaunchServices.m WQLocalization.m tests/WQLaunchServicesTests.m
 
 printf '\n== WQLocalizationTests (runtime, all languages) ==\n'
@@ -116,13 +117,13 @@ if [[ "${WQ_SKIP_IOS_CHECK:-0}" != 1 ]]; then
     printf '\n== Strict iOS arm64 syntax/link checks ==\n'
     IOS_SDK=$(xcrun --sdk iphoneos --show-sdk-path)
     MIN_OS=$(/usr/libexec/PlistBuddy -c 'Print :MinimumOSVersion' Info.plist)
-    SOURCES=(WQCore.m WQAccess.m WQScanTask.m WQLocalization.m WQLaunchServices.m WQUI.m WQSharing.m WQApps.m WQCache.m WQPlistEditor.m WQHexViewer.m WQSQLiteViewer.m WQSQLiteSave.m WQHealth.m WQTrash.m WQArchive.m WQSyntax.m WQMediaStream.m WQWebServer.m WQTheme.m main.m)
+    SOURCES=(WQCore.m WQAccess.m WQScanTask.m WQLocalization.m WQLaunchServices.m WQUI.m WQSharing.m WQApps.m WQCache.m WQPlistEditor.m WQHexViewer.m WQSQLiteViewer.m WQSQLiteSave.m WQHealth.m WQTrash.m WQArchive.m WQSyntax.m WQMediaStream.m WQWebServer.m WQTheme.m WQInspector.m main.m)
     FLAGS=(-fobjc-arc -fmodules "-fmodules-cache-path=$OUT/modules-ios" -arch arm64 "-miphoneos-version-min=$MIN_OS" -isysroot "$IOS_SDK" -Wall -Wextra -Werror -O2)
     xcrun --sdk iphoneos clang -fsyntax-only "${FLAGS[@]}" "${SOURCES[@]}" > "$OUT/ios-syntax.log" 2>&1 || {
         cat "$OUT/ios-syntax.log" >&2
         exit 1
     }
-    xcrun --sdk iphoneos clang "${FLAGS[@]}" -framework UIKit -framework Foundation -framework Security -framework UniformTypeIdentifiers -lsqlite3 -lz \
+    xcrun --sdk iphoneos clang "${FLAGS[@]}" -framework UIKit -framework Foundation -framework Security -framework UniformTypeIdentifiers -framework JavaScriptCore -lsqlite3 -lz \
         "${SOURCES[@]}" -o "$OUT/WQFiles-link-check" > "$OUT/ios-link.log" 2>&1 || {
         cat "$OUT/ios-link.log" >&2
         exit 1

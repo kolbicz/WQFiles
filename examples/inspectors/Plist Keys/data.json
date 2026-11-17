@@ -1,0 +1,8 @@
+{
+  "names": {
+    "CFBundleIdentifier": "Bundle ID",
+    "CFBundleShortVersionString": "Version",
+    "CFBundleVersion": "Build",
+    "MinimumOSVersion": "Minimum iOS"
+  }
+}

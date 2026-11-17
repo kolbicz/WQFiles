@@ -35,6 +35,7 @@
 #import "WQTheme.h"
 #import "WQSyntax.h"
 #import "WQMediaStream.h"
+#import "WQInspector.h"
 #import <AVKit/AVKit.h>
 #import <AVFoundation/AVFoundation.h>
 #import <objc/runtime.h>
@@ -1445,6 +1446,228 @@ static NSString *wq_info_date(struct timespec ts)
 }
 
 @end
+
+#pragma mark - Custom inspectors (#45)
+
+// Shows what a user-installed inspector script returns for one file: its
+// sections as a table, console.log lines at the end. Tap a row to copy its
+// value; Share sends everything as text.
+@interface WQInspectorViewController : UITableViewController
+- (instancetype)initWithPath:(NSString *)path inspector:(WQInspector *)inspector;
+@end
+
+@implementation WQInspectorViewController {
+    NSString *_path;
+    WQInspector *_inspector;
+    WQInspectorResult *_result;
+    NSArray<NSString *> *_log;
+    NSString *_status;       // running / error text
+    BOOL _failed;
+}
+
+- (instancetype)initWithPath:(NSString *)path inspector:(WQInspector *)inspector
+{
+    if ((self = [super initWithStyle:UITableViewStyleInsetGrouped])) {
+        _path = [path copy];
+        _inspector = inspector;
+        self.title = WQVerbatim(inspector.name);
+    }
+    return self;
+}
+
+- (void)viewDidLoad
+{
+    [super viewDidLoad];
+    self.navigationItem.largeTitleDisplayMode = UINavigationItemLargeTitleDisplayModeNever;
+    self.navigationItem.rightBarButtonItem = [[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemAction
+                                                                                           target:self action:@selector(share:)];
+    self.navigationItem.rightBarButtonItem.enabled = NO;
+    [self run];
+}
+
+- (void)run
+{
+    _status = WQLocalized(@"Running the inspector…");
+    _failed = NO;
+    [self.tableView reloadData];
+    static dispatch_queue_t queue;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{ queue = dispatch_queue_create("wq.inspector", dispatch_queue_attr_make_with_qos_class(DISPATCH_QUEUE_SERIAL, QOS_CLASS_USER_INITIATED, 0)); });
+    NSString *path = _path;
+    WQInspector *inspector = _inspector;
+    __weak typeof(self) weakSelf = self;
+    dispatch_async(queue, ^{
+        if (!weakSelf) return;   // left before it started
+        NSString *error = nil;
+        struct stat st = {0};
+        BOOL found = wq_stat(path, &st);
+        NSData *bytes = found ? wq_read(path, WQInspectorMaxInputBytes + 1, &error) : nil;
+        BOOL truncated = bytes.length > WQInspectorMaxInputBytes;
+        if (truncated) bytes = [bytes subdataWithRange:NSMakeRange(0, WQInspectorMaxInputBytes)];
+        NSArray *log = nil;
+        WQInspectorResult *result = bytes
+            ? wq_inspector_run(inspector, bytes, truncated, path.lastPathComponent, (unsigned long long)st.st_size, 2.0, &log, &error) : nil;
+        if (!bytes && !error) error = WQLocalized(@"The file can't be read.");
+        wq_log(@"inspector %@ on %@: %@", inspector.name, path.lastPathComponent, result ? @"OK" : error);
+        dispatch_async(dispatch_get_main_queue(), ^{
+            WQInspectorViewController *strongSelf = weakSelf;
+            if (!strongSelf) return;
+            strongSelf->_result = result;
+            strongSelf->_log = log;
+            strongSelf->_failed = result == nil;
+            strongSelf->_status = result ? (result.capped ? WQLocalized(@"The result was shortened to the inspector limits.") : nil) : error;
+            if (result.title.length) strongSelf.title = WQVerbatim(result.title);
+            strongSelf.navigationItem.rightBarButtonItem.enabled = result != nil;
+            [strongSelf.tableView reloadData];
+        });
+    });
+}
+
+// Sections: [status] + result sections + [log].
+- (BOOL)hasStatus { return _status.length > 0; }
+- (NSInteger)resultOffset { return self.hasStatus ? 1 : 0; }
+
+- (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView
+{
+    return self.resultOffset + (NSInteger)_result.sections.count + (_log.count ? 1 : 0);
+}
+
+- (WQInspectorSection *)sectionAt:(NSInteger)section
+{
+    NSInteger i = section - self.resultOffset;
+    return i >= 0 && i < (NSInteger)_result.sections.count ? _result.sections[(NSUInteger)i] : nil;
+}
+
+- (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section
+{
+    if (self.hasStatus && section == 0) return 1;
+    WQInspectorSection *s = [self sectionAt:section];
+    if (!s) return (NSInteger)_log.count;
+    return (NSInteger)s.rows.count + (s.text.length ? 1 : 0);
+}
+
+- (NSString *)tableView:(UITableView *)tableView titleForHeaderInSection:(NSInteger)section
+{
+    if (self.hasStatus && section == 0) return nil;
+    WQInspectorSection *s = [self sectionAt:section];
+    return s ? s.title : WQLocalizedNullable(@"Log");
+}
+
+- (NSString *)tableView:(UITableView *)tableView titleForFooterInSection:(NSInteger)section
+{
+    if (section != [self numberOfSectionsInTableView:tableView] - 1 || _failed) return nil;
+    return WQLocalizedFormat(@"From the inspector in %@. Tap a value to copy it.", _inspector.folder.lastPathComponent);
+}
+
+- (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath
+{
+    UITableViewCell *cell = [tableView dequeueReusableCellWithIdentifier:@"i"]
+        ?: [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleDefault reuseIdentifier:@"i"];
+    UIListContentConfiguration *c = UIListContentConfiguration.subtitleCellConfiguration;
+    c.textProperties.numberOfLines = 0;
+    c.secondaryTextProperties.numberOfLines = 0;
+    cell.selectionStyle = UITableViewCellSelectionStyleDefault;
+    if (self.hasStatus && indexPath.section == 0) {
+        c.text = _status;
+        c.textProperties.color = _failed ? UIColor.systemRedColor : UIColor.secondaryLabelColor;
+        c.secondaryText = _failed ? WQLocalized(@"Fix the inspector's script, then tap to run it again.") : nil;
+        cell.contentConfiguration = c;
+        cell.selectionStyle = _failed ? UITableViewCellSelectionStyleDefault : UITableViewCellSelectionStyleNone;
+        return cell;
+    }
+    WQInspectorSection *s = [self sectionAt:indexPath.section];
+    UIFont *mono = [UIFont monospacedSystemFontOfSize:13 weight:UIFontWeightRegular];
+    if (!s) {
+        c.text = WQVerbatim(_log[(NSUInteger)indexPath.row]);
+        c.textProperties.font = mono;
+    } else if ((NSUInteger)indexPath.row < s.rows.count) {
+        WQInspectorRow *row = s.rows[(NSUInteger)indexPath.row];
+        // Short pairs side by side; otherwise the label above the value.
+        UIListContentConfiguration *v = UIListContentConfiguration.valueCellConfiguration;
+        if (row.value.length <= 40 && row.label.length <= 30) {
+            v.text = row.label.length ? WQVerbatim(row.label) : @" ";
+            v.secondaryText = WQVerbatim(row.value);
+            v.secondaryTextProperties.numberOfLines = 0;
+            cell.contentConfiguration = v;
+            return cell;
+        }
+        c.text = row.label.length ? WQVerbatim(row.label) : nil;
+        c.textProperties.font = [UIFont preferredFontForTextStyle:UIFontTextStyleFootnote];
+        c.textProperties.color = UIColor.secondaryLabelColor;
+        c.secondaryText = WQVerbatim(row.value);
+        c.secondaryTextProperties.font = [UIFont preferredFontForTextStyle:UIFontTextStyleBody];
+        c.secondaryTextProperties.color = UIColor.labelColor;
+    } else {
+        c.text = WQVerbatim(s.text);
+        c.textProperties.font = mono;
+    }
+    cell.contentConfiguration = c;
+    return cell;
+}
+
+- (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath
+{
+    [tableView deselectRowAtIndexPath:indexPath animated:YES];
+    if (self.hasStatus && indexPath.section == 0) { if (_failed) [self run]; return; }
+    WQInspectorSection *s = [self sectionAt:indexPath.section];
+    NSString *copy = !s ? _log[(NSUInteger)indexPath.row]
+        : (NSUInteger)indexPath.row < s.rows.count ? s.rows[(NSUInteger)indexPath.row].value : s.text;
+    UIPasteboard.generalPasteboard.string = copy;
+    UIImpactFeedbackGenerator *haptic = [[UIImpactFeedbackGenerator alloc] initWithStyle:UIImpactFeedbackStyleLight];
+    [haptic impactOccurred];
+}
+
+- (void)share:(UIBarButtonItem *)sender
+{
+    if (!_result) return;
+    UIActivityViewController *share = [[UIActivityViewController alloc] initWithActivityItems:@[_result.plainText] applicationActivities:nil];
+    share.popoverPresentationController.barButtonItem = sender;
+    [self presentViewController:share animated:YES completion:nil];
+}
+
+@end
+
+// Open As → Custom Inspector…: the installed inspectors for this file; one
+// match opens directly, several (or none matching) ask which to use.
+static void wq_open_custom_inspector(UIViewController *host, NSString *path, UIView *source)
+{
+    NSString *folder = wq_inspectors_folder();
+    NSArray<NSString *> *problems = nil;
+    NSArray<WQInspector *> *all = wq_inspectors_in(folder, &problems);
+    for (NSString *p in problems) wq_log(@"inspectors: skipped %@", p);
+    UINavigationController *nav = host.navigationController;
+    void (^open)(WQInspector *) = ^(WQInspector *inspector) {
+        [nav pushViewController:[[WQInspectorViewController alloc] initWithPath:path inspector:inspector] animated:YES];
+    };
+    if (!all.count) {
+        NSString *message = WQLocalized(@"Custom inspectors are small JavaScript programs that show a file's contents your way. Put one folder per inspector (manifest.json and inspect.js) into WQ Files' Inspectors folder, also reachable in the Files app. The README on GitHub describes the format.");
+        if (problems.count) message = [message stringByAppendingFormat:@"\n\n%@", [problems componentsJoinedByString:@"\n"]];
+        UIAlertController *alert = wq_alert_controller(@"No Custom Inspectors", message, UIAlertControllerStyleAlert);
+        [alert addAction:wq_alert_action(@"Open Inspectors Folder", UIAlertActionStyleDefault, ^(UIAlertAction *__unused a) {
+            [nav pushViewController:[[WQDirViewController alloc] initWithPath:folder title:WQLocalized(@"Inspectors")] animated:YES];
+        })];
+        [alert addAction:wq_alert_action(@"Cancel", UIAlertActionStyleCancel, nil)];
+        [host presentViewController:alert animated:YES completion:nil];
+        return;
+    }
+    NSArray<WQInspector *> *matching = [all filteredArrayUsingPredicate:[NSPredicate predicateWithBlock:^BOOL(WQInspector *i, NSDictionary *__unused b) {
+        return [i matchesFileName:path.lastPathComponent];
+    }]];
+    if (matching.count == 1) { open(matching.firstObject); return; }
+    NSArray<WQInspector *> *offer = matching.count ? matching : all;
+    NSString *message = matching.count ? nil
+        : WQLocalizedFormat(@"No inspector is set up for .%@ files. Use one anyway?", path.pathExtension.length ? path.pathExtension : @"?");
+    UIAlertController *sheet = wq_alert_controller(@"Custom Inspector", message, UIAlertControllerStyleActionSheet);
+    for (WQInspector *inspector in offer)
+        [sheet addAction:wq_alert_action(WQVerbatim(inspector.name), UIAlertActionStyleDefault, ^(UIAlertAction *__unused a) { open(inspector); })];
+    [sheet addAction:wq_alert_action(@"Open Inspectors Folder", UIAlertActionStyleDefault, ^(UIAlertAction *__unused a) {
+        [nav pushViewController:[[WQDirViewController alloc] initWithPath:folder title:WQLocalized(@"Inspectors")] animated:YES];
+    })];
+    [sheet addAction:wq_alert_action(@"Cancel", UIAlertActionStyleCancel, nil)];
+    sheet.popoverPresentationController.sourceView = source ?: host.view;
+    sheet.popoverPresentationController.sourceRect = (source ?: host.view).bounds;
+    [host presentViewController:sheet animated:YES completion:nil];
+}
 
 @interface WQDirViewController ()
 - (BOOL)wq_wantsToolbar;
@@ -3068,6 +3291,11 @@ static NSString *wq_info_date(struct timespec ts)
                                   handler:^(UIAction *__unused a) { WQDirViewController *strongSelf = weakSelf; WQItem *latest = currentItem(); if (strongSelf && latest) wq_open_file(strongSelf.navigationController, latest.path, ro, WQOpenSQLite); }],
                 [UIAction actionWithTitle:WQLocalizedNullable(@"Media Player") image:[UIImage systemImageNamed:@"play.rectangle"] identifier:nil
                                   handler:^(UIAction *__unused a) { WQDirViewController *strongSelf = weakSelf; WQItem *latest = currentItem(); if (strongSelf && latest) wq_open_file(strongSelf.navigationController, latest.path, ro, WQOpenMedia); }],
+                [UIAction actionWithTitle:WQLocalizedNullable(@"Custom Inspector…") image:[UIImage systemImageNamed:@"curlybraces"] identifier:nil
+                                  handler:^(UIAction *__unused a) {
+                    WQDirViewController *strongSelf = weakSelf; WQItem *latest = currentItem();
+                    if (strongSelf && latest) wq_open_custom_inspector(strongSelf, latest.path, [strongSelf.tableView cellForRowAtIndexPath:indexPath]);
+                }],
             ]]];
         }
         [actions addObject:[UIAction actionWithTitle:WQLocalizedNullable(@"Copy Path") image:[UIImage systemImageNamed:@"doc.on.doc"]

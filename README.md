@@ -198,6 +198,58 @@ App names come from LaunchServices' own database, read from lsd's container
 only have localized names use a built-in table. Services without an icon get a
 symbol tile.
 
+## Custom inspectors
+
+Small JavaScript programs that show a file's contents your way ([#45](https://github.com/kolbicz/WQFiles/issues/45)).
+WQ Files ships only the runtime; the inspectors are yours. Long-press a file →
+**Open As → Custom Inspector…**. When one inspector matches the file's
+extension it opens directly, otherwise you pick one.
+
+Put one folder per inspector into WQ Files' **Inspectors** folder (Documents/Inspectors,
+also in the Files app under On My iPhone → WQ Files):
+
+```
+Inspectors/
+  JSON Summary/
+    manifest.json   { "name": "JSON Summary", "api": 1, "extensions": ["json"] }
+    inspect.js
+    data.json       optional reference data (lookup tables, schemas)
+```
+
+`manifest.json`: `name` (1–80 characters), `api` (must be `1`), `extensions`
+(for example `["json", "plist"]`, or `["*"]` for any file). Optional: `script`
+(default `inspect.js`), `data` (default `data.json` when present), `description`.
+
+`inspect.js` defines `inspect(input, data)` and returns what to show:
+
+```javascript
+function inspect(input, data) {
+  const record = JSON.parse(input.text);
+  return {
+    title: "My inspector",                       // optional
+    sections: [
+      { title: "Details", rows: [
+          { label: "Name", value: record.name },
+          { label: "Type", value: data.types[record.type] ?? "Unknown" } ] },
+      { title: "Raw", text: input.text }           // monospaced text
+    ]
+  };
+}
+```
+
+`input` has `name`, `extension`, `size`, `truncated`, `bytes` (a `Uint8Array`
+of at most 8 MB of the file), `text` (the bytes as UTF-8, or `null`) and
+`plist` (the file parsed as a property list, or `null`; dates become ISO 8601
+strings, data becomes base64). Row values can be any JSON value; objects and
+arrays are shown as JSON. `console.log(...)` lines appear under the result.
+
+Tap a value to copy it; Share sends the whole result as text. Inspectors are
+read-only: scripts run off the main thread with a 2-second limit and have no
+access to files, the network or the app. Results are capped at 100 sections,
+5,000 rows and 20,000 characters per text. Errors (with the line number) are
+shown in place of the result. Two examples are in
+[`examples/inspectors`](examples/inspectors).
+
 ## Themes
 
 **Settings → Theme** sets the colors of the new design: **Default**, **Custom Color** (pick one color, WQ Files derives the rest) or a theme you import. **Plain Background** works with all of them, and **Colored Cards** (on by default) tints the start screen's cards in the color of their icon. A theme also colors the Wi-Fi Sharing page.

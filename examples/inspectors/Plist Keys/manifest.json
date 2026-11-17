@@ -1,0 +1,7 @@
+{
+  "name": "Plist Keys",
+  "api": 1,
+  "extensions": ["plist"],
+  "description": "Keys of a property list, with names from data.json where known.",
+  "data": "data.json"
+}

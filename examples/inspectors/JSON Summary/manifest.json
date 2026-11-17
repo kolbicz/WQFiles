@@ -1,0 +1,6 @@
+{
+  "name": "JSON Summary",
+  "api": 1,
+  "extensions": ["json"],
+  "description": "The top-level keys of a JSON file and their values."
+}
