@@ -105,7 +105,10 @@ static void TestBundleIdentifiers(void)
     WQCheck(WQAppsSupportBundleIDValid(@"com.example.app"));
     WQCheck(WQAppsSupportBundleIDValid(@"com.example-app_1"));
     WQCheck(!WQAppsSupportBundleIDValid(@""));
-    WQCheck(!WQAppsSupportBundleIDValid(@"nodot"));
+    WQCheck(WQAppsSupportBundleIDValid(@"pinterest"));   // real one-word bundle ids
+    WQCheck(WQAppsSupportBundleIDValid(@"ifengNews"));
+    WQCheck(!WQAppsSupportBundleIDValid(@"ab"));
+    WQCheck(!WQAppsSupportBundleIDValid(@"..."));
     WQCheck(!WQAppsSupportBundleIDValid(@"com/example"));
     WQCheck(!WQAppsSupportBundleIDValid(@"com..example"));
     WQCheck(!WQAppsSupportBundleIDValid(@".com.example"));
