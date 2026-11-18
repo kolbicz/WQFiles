@@ -4194,8 +4194,19 @@ static void wq_trace_navigation_bar(UINavigationController *nav, NSString *when)
     self.navigationBar.tintColor = wq_theme_accent();   // a new object, so the bar redraws
 }
 
+static CGFloat wq_top_edge_effect_height(UIViewController *vc);
+static const void *const WQEdgeBandHeightKey = &WQEdgeBandHeightKey;
+
 - (void)navigationController:(UINavigationController *)nav willShowViewController:(UIViewController *)vc animated:(BOOL)animated
 {
+    // Going forward: note the band height of the screen being left, to tell
+    // a stale band after coming back (#70).
+    NSUInteger count = nav.viewControllers.count;
+    if (count >= 2 && count > _shownDepth && nav.viewControllers.lastObject == vc) {
+        UIViewController *left = nav.viewControllers[count - 2];
+        if (left.isViewLoaded && left.view.window)
+            objc_setAssociatedObject(left, WQEdgeBandHeightKey, @(wq_top_edge_effect_height(left)), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    }
     BOOL toolbar = [vc isKindOfClass:WQDirViewController.class] && [(WQDirViewController *)vc wq_wantsToolbar];
     [nav setToolbarHidden:!toolbar animated:animated];
     NSUInteger depth = [nav.viewControllers indexOfObject:vc];
@@ -4232,28 +4243,100 @@ static void wq_pass_through_edge_effects(UIView *root)
     }
 }
 
-// After a step back, iOS 27 can also keep drawing that band at the taller
-// height (#70). Hiding and showing the screen's top edge effect once makes
-// UIKit lay it out again for this screen's own navigation bar.
-static void wq_refresh_top_edge_effect(UIViewController *vc)
+// After a step back, iOS 27 can also keep drawing that band at the height of
+// the previous screen's taller bar (#70): 210 pt instead of 156 pt under a
+// bar ending at 168. A redraw alone keeps the stale height, so check the
+// band against its height before the screen was left and, only while it is
+// too tall, try
+// stronger resets one at a time (debug build 4 logs which one works).
+static UIView *wq_top_edge_effect_view(UIView *root)
 {
+    NSMutableArray<UIView *> *queue = [NSMutableArray arrayWithObject:root];
+    for (NSUInteger seen = 0; queue.count && seen < 600; seen++) {
+        UIView *v = queue.firstObject;
+        [queue removeObjectAtIndex:0];
+        if ([NSStringFromClass(v.class) isEqualToString:@"UIKit.ScrollEdgeEffectView"] && !v.hidden && v.window) {
+            CGRect r = [v convertRect:v.bounds toView:nil];
+            if (CGRectGetMinY(r) < 1) return v;
+            continue;
+        }
+        [queue addObjectsFromArray:v.subviews];
+    }
+    return nil;
+}
+
+// Height of the top band in window points; 0 when there is none.
+static CGFloat wq_top_edge_effect_height(UIViewController *vc)
+{
+    UIView *band = wq_top_edge_effect_view(vc.view);
+    return band ? CGRectGetMaxY([band convertRect:band.bounds toView:nil]) : 0;
+}
+
+// Too tall: more than 8 pt over the height the band had when the screen was
+// left (the bar can't change while the screen is hidden). No record, no fix.
+static BOOL wq_top_edge_effect_too_tall(UIViewController *vc, CGFloat *height, CGFloat *before)
+{
+    CGFloat h = wq_top_edge_effect_height(vc);
+    NSNumber *saved = objc_getAssociatedObject(vc, WQEdgeBandHeightKey);
+    if (height) *height = h;
+    if (before) *before = saved ? saved.doubleValue : -1;
+    return saved && saved.doubleValue > 0 && h > saved.doubleValue + 8;
+}
+
+static void wq_fix_top_edge_effect(UINavigationController *nav, UIViewController *vc, NSUInteger step)
+{
+    if (nav.topViewController != vc || !vc.view.window) return;
+    CGFloat height = 0, before = 0;
+    BOOL tooTall = wq_top_edge_effect_too_tall(vc, &height, &before);
+#if WQ_TOUCH_TRACE
+    static NSString *const names[] = { @"after the step back", @"after re-layout", @"after style reset", @"after re-adding the list" };
+    CGFloat barBottom = CGRectGetMaxY([nav.navigationBar convertRect:nav.navigationBar.bounds toView:nil]);
+    wq_trace(@"edge band %@: height %.0f, before leaving %.0f, bar bottom %.0f -> %@", names[MIN(step, 3u)], height, before, barBottom,
+             height == 0 ? @"no band" : (tooTall ? @"TOO TALL" : @"ok"));
+#endif
+    wq_pass_through_edge_effects(vc.view);   // a new band takes touches again
+    if (!tooTall || step >= 3) return;
+
     UIScrollView *scroll = [vc.view isKindOfClass:UIScrollView.class] ? (UIScrollView *)vc.view : nil;
-    for (UIView *v in vc.view.subviews) if (!scroll && [v isKindOfClass:UIScrollView.class]) scroll = (UIScrollView *)v;
-    if (!scroll || scroll.topEdgeEffect.hidden) return;
-    scroll.topEdgeEffect.hidden = YES;
-    __weak UIScrollView *weakScroll = scroll;
+    if (step == 0) {
+        // 1. Lay out the bar and the list again.
+        [nav.navigationBar setNeedsLayout];
+        [nav.view setNeedsLayout];
+        [vc.view setNeedsLayout];
+        [nav.view layoutIfNeeded];
+        [scroll setNeedsLayout];
+        [scroll layoutIfNeeded];
+    } else if (step == 1) {
+        // 2. Switch the band's style and back, which makes UIKit build it
+        //    anew. (Resetting the title display collapsed the large title.)
+        if (scroll) {
+            UIScrollEdgeEffect *edge = scroll.topEdgeEffect;
+            UIScrollEdgeEffectStyle *style = edge.style;
+            edge.style = style == UIScrollEdgeEffectStyle.hardStyle ? UIScrollEdgeEffectStyle.softStyle : UIScrollEdgeEffectStyle.hardStyle;
+            [scroll layoutIfNeeded];
+            edge.style = style;
+            [scroll setNeedsLayout];
+            [scroll layoutIfNeeded];
+        }
+    } else {
+        // 3. Take the list off screen and put it straight back, so the band
+        //    is attached to this screen's bar anew.
+        UIView *view = vc.view, *parent = view.superview;
+        if (parent) {
+            NSUInteger index = [parent.subviews indexOfObject:view];
+            CGRect frame = view.frame;
+            CGPoint offset = scroll.contentOffset;
+            [view removeFromSuperview];
+            [parent insertSubview:view atIndex:MIN(index, parent.subviews.count)];
+            view.frame = frame;
+            if (scroll) scroll.contentOffset = offset;
+            [parent layoutIfNeeded];
+        }
+    }
+    __weak UINavigationController *weakNav = nav;
     __weak UIViewController *weakVC = vc;
     dispatch_async(dispatch_get_main_queue(), ^{
-        weakScroll.topEdgeEffect.hidden = NO;
-        [weakScroll setNeedsLayout];
-        [weakScroll layoutIfNeeded];
-        wq_pass_through_edge_effects(weakVC.view);   // a new band takes touches again
-#if WQ_TOUCH_TRACE
-        for (UIView *v in weakScroll.subviews)
-            for (UIView *w in [@[v] arrayByAddingObjectsFromArray:v.subviews])
-                if ([NSStringFromClass(w.class) containsString:@"ScrollEdgeEffect"])
-                    wq_trace(@"edge effect after refresh: %@ touches %@", wq_trace_view(w), w.userInteractionEnabled ? @"on" : @"off");
-#endif
+        if (weakNav && weakVC) wq_fix_top_edge_effect(weakNav, weakVC, step + 1);
     });
 }
 
@@ -4261,7 +4344,13 @@ static void wq_refresh_top_edge_effect(UIViewController *vc)
 {
     (void)animated;
     wq_pass_through_edge_effects(vc.view);
-    if (nav.viewControllers.count < _shownDepth) wq_refresh_top_edge_effect(vc);
+    if (nav.viewControllers.count < _shownDepth) {
+        __weak UINavigationController *weakNav = nav;
+        __weak UIViewController *weakVC = vc;
+        dispatch_async(dispatch_get_main_queue(), ^{
+            if (weakNav && weakVC) wq_fix_top_edge_effect(weakNav, weakVC, 0);
+        });
+    }
     _shownDepth = nav.viewControllers.count;
 #if WQ_TOUCH_TRACE
     wq_trace_navigation_bar(nav, [NSString stringWithFormat:@"shown %@ \"%@\"", NSStringFromClass(vc.class), vc.title ?: @""]);
