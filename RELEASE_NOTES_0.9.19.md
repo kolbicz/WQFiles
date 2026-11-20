@@ -13,10 +13,11 @@ A small fix release, plus optional App Store icons.
 
 - **Apps with one-word bundle ids** like Pinterest (`pinterest`) showed "container identity unavailable" and 0 KB, and couldn't be opened, backed up or cleared. They work now.
 - **App icons:** other apps' icons can't be read with worse_query, so they show a placeholder. Third-party apps now all get the neutral one, instead of misleading guesses like the Books icon for Facebook or the Music icon for TikTok. Apple services that iOS only gives a placeholder for no longer show iOS's grey grid in dark mode.
+- **Apps list on iOS 27:** the header above the list (number of apps and their size) showed as an empty band, leaving a large gap. It shows its text again, with less space above it.
 - **iOS 27 beta 5 / public beta 3** ([#70](https://github.com/kolbicz/WQFiles/issues/70)): after swiping back from App Backups, the first row on the Backups tab stopped responding. It keeps working now. The blurred band under the bar can still look too tall on that beta; that's an iOS bug. Release versions of iOS aren't affected.
 
 ## Credit
 
 New design: GpGp700. Sandbox technique: [worse_query](https://github.com/forcequitOS/worse_query) by Taj C (forcequit). Container enumeration: [KAMUI](https://github.com/murk-sus/kamui-escape) by murk-sus. Resumable scans: hhh2210. Custom inspectors idea: deltaII. Translations: iosrxwy and FrogTool (Simplified Chinese), kinboy56 (Japanese), hfip (Arabic), hooray804 (Korean), Reinascape (Russian), romlayvn-93 (Vietnamese), buraakkcayir (Turkish review). Thanks to control0forver for testing four debug builds, and to everyone who sent screenshots and Logs. GPL-3.0-or-later.
 
-SHA-256 of WQFiles.ipa: `912f036be87cfe682e6ec8fba7e58ceda2e9f2b77c2ac3f7e25e026e25b1d79f`
+SHA-256 of WQFiles.ipa: `32a0821d16b4ddedcc7b2063f90530952a644308009db0522c618c23233cacca`

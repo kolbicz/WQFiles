@@ -22,11 +22,11 @@
       "versions": [
         {
           "version": "0.9.19",
-          "buildVersion": "112",
+          "buildVersion": "113",
           "date": "2026-11-20",
-          "size": 2182113,
+          "size": 2182170,
           "downloadURL": "https://github.com/kolbicz/WQFiles/releases/download/v0.9.19/WQFiles.ipa",
-          "localizedDescription": "Optional App Store icons for other apps (Settings → App Store Icons), fixes apps with one-word bundle ids (like Pinterest), and keeps the Backups tab working on iOS 27 beta 5.",
+          "localizedDescription": "Optional App Store icons for other apps (Settings → App Store Icons), fixes apps with one-word bundle ids (like Pinterest) and the empty gap above the Apps list on iOS 27, and keeps the Backups tab working on iOS 27 beta 5.",
           "minOSVersion": "26.0"
         },
         {
