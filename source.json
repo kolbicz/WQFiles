@@ -21,6 +21,15 @@
       "category": "utilities",
       "versions": [
         {
+          "version": "0.9.19",
+          "buildVersion": "111",
+          "date": "2026-11-20",
+          "size": 2171909,
+          "downloadURL": "https://github.com/kolbicz/WQFiles/releases/download/v0.9.19/WQFiles.ipa",
+          "localizedDescription": "Fixes apps with one-word bundle ids (like Pinterest), shows a neutral placeholder for other apps' icons, and keeps the Backups tab working on iOS 27 beta 5.",
+          "minOSVersion": "26.0"
+        },
+        {
           "version": "0.9.18",
           "buildVersion": "106",
           "date": "2026-11-17",
