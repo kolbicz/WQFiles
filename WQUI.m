@@ -196,7 +196,9 @@ static UIImage *wq_round_icon(UIImage *raw)
 }
 
 // Symbol tile for system services and extensions that have no icon at all,
-// picked from keywords in the bundle id.
+// picked from keywords in Apple bundle ids. Other apps' icons can't be read
+// (worse_query doesn't reach them), and keywords misfire on their ids
+// (com.facebook.Facebook -> "book"), so they all get the neutral gear.
 static UIImage *wq_service_tile(NSString *bundleID)
 {
     static NSArray<NSArray *> *rules;
@@ -257,7 +259,8 @@ static UIImage *wq_service_tile(NSString *bundleID)
     NSString *key = bundleID.lowercaseString;
     NSString *symbol = @"gearshape.fill";
     UIColor *color = UIColor.systemGrayColor;
-    for (NSArray *rule in rules) {
+    BOOL apple = [key hasPrefix:@"com.apple."] || [key hasPrefix:@"group.com.apple."] || [key hasPrefix:@"systemgroup.com.apple."];
+    for (NSArray *rule in apple ? rules : @[]) {
         BOOL hit = NO;
         for (NSString *word in rule[0]) if ([key containsString:word]) { hit = YES; break; }
         if (hit) { symbol = rule[1]; color = rule[2]; break; }
