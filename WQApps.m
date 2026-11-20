@@ -653,6 +653,7 @@ static BOOL wq_dir_size_cancellable(NSString *dir, NSString *taskID, WQScanCance
     self.navigationItem.hidesSearchBarWhenScrolling = NO;
     self.definesPresentationContext = YES;
     self.tableView.tableHeaderView = wq_device_header(self.view.bounds.size.width);
+    self.tableView.sectionHeaderTopPadding = 0;   // the device header already leaves space
     self.refreshControl = [UIRefreshControl new];
     [self.refreshControl addTarget:self action:@selector(userRefresh) forControlEvents:UIControlEventValueChanged];
     _scanTask = [WQScanTask taskNamed:@"apps"];
@@ -1076,20 +1077,18 @@ static void WQAppScanWatch(WQScanCancellation *cancellation, NSUInteger lastSeri
     return (_busy && !_apps.count) ? 1 : (NSInteger)self.visibleApps.count;
 }
 
+// Always our own header view: iOS 27 draws the plain-style title header as an
+// empty band (no text), which left a blank gap above the list.
 - (UIView *)tableView:(UITableView *)tableView viewForHeaderInSection:(NSInteger)section
 {
-    if (!_status || _fraction < 0) return nil;   // plain title header
     WQProgressHeaderView *header = [tableView dequeueReusableHeaderFooterViewWithIdentifier:@"progress"]
         ?: [[WQProgressHeaderView alloc] initWithReuseIdentifier:@"progress"];
-    [header setText:_status fraction:_fraction];
+    [header setText:[self headerText] fraction:_status ? _fraction : -1];
     return header;
 }
 
-- (NSString *)tableView:(UITableView *)tableView titleForHeaderInSection:(NSInteger)section
+- (NSString *)headerText
 {
-    // The progress header draws the status itself; a title here would be drawn
-    // into it a second time (overlapping text).
-    if (_status && _fraction >= 0) return nil;
     if (_status) return _status;
     unsigned long long total = 0;
     for (WQAppItem *a in _apps) total += a.bytes;
