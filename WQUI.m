@@ -98,36 +98,69 @@ static UIImage *wq_raw_icon(NSString *bundleID)
     return [UIImage _applicationIconImageForBundleIdentifier:bundleID format:2 scale:scale];
 }
 
+// YES when two fingerprints are near-identical (small rendering differences).
+static BOOL wq_icon_fingerprints_match(NSData *a, NSData *b)
+{
+    if (!a || !b || a.length != b.length) return NO;
+    const uint8_t *x = a.bytes, *y = b.bytes;
+    unsigned long diff = 0;
+    for (NSUInteger i = 0; i < a.length; i++) diff += (unsigned long)abs((int)x[i] - (int)y[i]);
+    return diff / a.length < 8;
+}
+
+// iOS's placeholder is a flat grey square with a faint grid: no colour and
+// almost no contrast. Real icons, even grey ones like Settings, have strong
+// contrast (measured: placeholder sd 8–9, Settings 33–42).
+static BOOL wq_icon_fingerprint_looks_blank(NSData *fp)
+{
+    const uint8_t *p = fp.bytes;
+    double sum = 0, squares = 0;
+    NSUInteger n = 0;
+    for (NSUInteger i = 0; i + 3 < fp.length; i += 4) {
+        if (p[i + 3] < 200) continue;   // rounded corners
+        int r = p[i], g = p[i + 1], b = p[i + 2];
+        if (MAX(r, MAX(g, b)) - MIN(r, MIN(g, b)) > 6) return NO;   // coloured
+        double l = 0.299 * r + 0.587 * g + 0.114 * b;
+        sum += l;
+        squares += l * l;
+        n++;
+    }
+    if (n < 40) return NO;
+    double mean = sum / (double)n;
+    return sqrt(MAX(0.0, squares / (double)n - mean * mean)) < 16;
+}
+
 // The real icon for bundleID, or nil when iOS only has its placeholder.
+// iOS draws the placeholder light or dark depending on the appearance at the
+// time, so every variant seen is remembered: a blank-looking icon that matches
+// none is compared with the placeholder iOS draws right now.
 static UIImage *wq_real_icon(NSString *bundleID)
 {
     // Not dispatch_once: off the main thread UIKit's icon call waits for the
     // main thread, so a background icon warm-up inside a once-block while a
     // table cell on the main thread waited for the same block deadlocked
-    // (frozen UI, then a watchdog kill). Every thread may compute it; the
-    // first result is kept.
-    static NSData *placeholder;
+    // (frozen UI, then a watchdog kill). UIKit is only called outside the
+    // lock; the lock only guards the list.
+    static NSMutableArray<NSData *> *placeholders;
     static NSObject *guard;
     static dispatch_once_t guardOnce;   // only allocates, never calls UIKit
-    dispatch_once(&guardOnce, ^{ guard = [NSObject new]; });
-    NSData *known;
-    @synchronized (guard) { known = placeholder; }
-    if (!known) {
-        NSData *fresh = wq_icon_fingerprint(wq_raw_icon(@"cz.kolbi.wqfiles.no-such-app"));
-        @synchronized (guard) {
-            if (!placeholder) placeholder = fresh;
-            known = placeholder;
-        }
-    }
+    dispatch_once(&guardOnce, ^{ guard = [NSObject new]; placeholders = [NSMutableArray new]; });
     UIImage *raw = wq_raw_icon(bundleID);
     if (!raw || !raw.CGImage) return nil;
     NSData *fp = wq_icon_fingerprint(raw);
-    if (!known || fp.length != known.length) return raw;
-    // Near-identical to the placeholder (allow small rendering differences).
-    const uint8_t *a = fp.bytes, *b = known.bytes;
-    unsigned long diff = 0;
-    for (NSUInteger i = 0; i < fp.length; i++) diff += (unsigned long)abs((int)a[i] - (int)b[i]);
-    return diff / fp.length < 8 ? nil : raw;
+    if (!fp) return raw;
+    NSArray<NSData *> *known;
+    @synchronized (guard) { known = [placeholders copy]; }
+    for (NSData *placeholder in known) if (wq_icon_fingerprints_match(fp, placeholder)) return nil;
+    if (known.count && !wq_icon_fingerprint_looks_blank(fp)) return raw;
+    NSData *current = wq_icon_fingerprint(wq_raw_icon(@"cz.kolbi.wqfiles.no-such-app"));
+    if (!current) return raw;
+    @synchronized (guard) {
+        BOOL seen = NO;
+        for (NSData *placeholder in placeholders) if (wq_icon_fingerprints_match(current, placeholder)) { seen = YES; break; }
+        if (!seen && placeholders.count < 8) [placeholders addObject:current];
+    }
+    return wq_icon_fingerprints_match(fp, current) ? nil : raw;
 }
 
 // The icon from the app's own bundle, for when iOS only hands out its
