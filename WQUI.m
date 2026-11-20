@@ -9,6 +9,7 @@
 #import "WQTheme.h"
 #import "WQAccess.h"
 #import "WQLaunchServices.h"
+#import "WQStoreIconsSupport.h"
 #import <fcntl.h>
 #import <sys/sysctl.h>
 #import <sys/utsname.h>
@@ -283,6 +284,250 @@ static UIImage *wq_service_tile(NSString *bundleID)
     return tile;
 }
 
+#pragma mark - App Store icons
+
+// Settings → App Store Icons (off by default; see WQStoreIconsSupport.h).
+// Icons are fetched in batches off the main thread, kept as 120 px PNGs in
+// Application Support/StoreIcons, and announced with
+// WQStoreIconsChangedNotification (userInfo "ids": the bundle ids that got an
+// icon, none when everything changed). Apps without an entry are asked again
+// after a week at the earliest.
+NSString *const WQStoreIconsChangedNotification = @"WQStoreIconsChangedNotification";
+
+static dispatch_queue_t wq_store_state(void)
+{
+    static dispatch_queue_t queue;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{ queue = dispatch_queue_create("wqfiles.storeicons.state", DISPATCH_QUEUE_SERIAL); });
+    return queue;
+}
+
+static dispatch_queue_t wq_store_fetch_queue(void)
+{
+    static dispatch_queue_t queue;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{ queue = dispatch_queue_create("wqfiles.storeicons.fetch", DISPATCH_QUEUE_SERIAL); });
+    return queue;
+}
+
+static NSCache<NSString *, UIImage *> *wq_store_images(void)
+{
+    static NSCache *cache;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{ cache = [NSCache new]; cache.countLimit = 400; });
+    return cache;
+}
+
+static NSString *wq_store_dir(void)
+{
+    NSString *support = NSSearchPathForDirectoriesInDomains(NSApplicationSupportDirectory, NSUserDomainMask, YES).firstObject;
+    return [support stringByAppendingPathComponent:@"StoreIcons"];
+}
+
+static NSString *wq_store_file(NSString *bundleID)
+{
+    return [wq_store_dir() stringByAppendingPathComponent:[bundleID stringByAppendingPathExtension:@"png"]];
+}
+
+static NSString *wq_store_misses_file(void) { return [wq_store_dir() stringByAppendingPathComponent:@"misses.plist"]; }
+
+// State, only touched on wq_store_state().
+static NSMutableOrderedSet<NSString *> *gStorePending;
+static NSMutableSet<NSString *> *gStoreBusy;
+static NSMutableDictionary<NSString *, NSDate *> *gStoreMisses;
+static BOOL gStoreFlushScheduled, gStorePreloaded;
+
+BOOL wq_store_icons_enabled(void)
+{
+    return [NSUserDefaults.standardUserDefaults boolForKey:WQStoreIconsPref];
+}
+
+static void wq_store_announce(NSArray<NSString *> *_Nullable ids)
+{
+    dispatch_async(dispatch_get_main_queue(), ^{
+        [NSNotificationCenter.defaultCenter postNotificationName:WQStoreIconsChangedNotification object:nil
+                                                        userInfo:ids ? @{ @"ids": ids } : nil];
+    });
+}
+
+void wq_set_store_icons_enabled(BOOL enabled)
+{
+    [NSUserDefaults.standardUserDefaults setBool:enabled forKey:WQStoreIconsPref];
+    dispatch_async(wq_store_state(), ^{
+        [gStorePending removeAllObjects];
+        gStorePreloaded = NO;
+        gStoreMisses = nil;
+        if (!enabled) {
+            [wq_store_images() removeAllObjects];
+            [NSFileManager.defaultManager removeItemAtPath:wq_store_dir() error:NULL];
+        }
+        wq_store_announce(nil);
+    });
+}
+
+static UIImage *_Nullable wq_store_load_file(NSString *bundleID)
+{
+    NSData *data = [NSData dataWithContentsOfFile:wq_store_file(bundleID)];
+    if (data.length == 0 || data.length > WQStoreIconsMaxIconBytes) return nil;
+    UIImage *image = [UIImage imageWithData:data scale:1];
+    return image.CGImage ? image : nil;
+}
+
+// Once per launch: every icon on disk into memory, so lists drawn on the main
+// thread (which never reads files) show them too.
+static void wq_store_preload(void)
+{
+    if (gStorePreloaded) return;
+    gStorePreloaded = YES;
+    dispatch_async(wq_store_fetch_queue(), ^{
+        NSMutableArray<NSString *> *loaded = [NSMutableArray new];
+        for (NSString *name in [NSFileManager.defaultManager contentsOfDirectoryAtPath:wq_store_dir() error:NULL]) {
+            if (![name.pathExtension isEqualToString:@"png"]) continue;
+            NSString *bid = name.stringByDeletingPathExtension;
+            if (!WQStoreIconsEligible(bid) || [wq_store_images() objectForKey:bid]) continue;
+            UIImage *image = wq_store_load_file(bid);
+            if (image) { [wq_store_images() setObject:image forKey:bid]; [loaded addObject:bid]; }
+        }
+        if (loaded.count) wq_store_announce(loaded);
+    });
+}
+
+static NSData *_Nullable wq_store_get(NSURL *url, NSUInteger limit)
+{
+    static NSURLSession *session;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+        NSURLSessionConfiguration *config = NSURLSessionConfiguration.ephemeralSessionConfiguration;
+        config.timeoutIntervalForRequest = 20;
+        config.HTTPCookieStorage = nil;
+        config.HTTPShouldSetCookies = NO;
+        config.URLCache = nil;
+        session = [NSURLSession sessionWithConfiguration:config];
+    });
+    __block NSData *result = nil;
+    dispatch_semaphore_t done = dispatch_semaphore_create(0);
+    [[session dataTaskWithURL:url completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
+        NSInteger status = [response isKindOfClass:NSHTTPURLResponse.class] ? ((NSHTTPURLResponse *)response).statusCode : 0;
+        if (!error && status == 200 && data.length <= limit) result = data;
+        dispatch_semaphore_signal(done);
+    }] resume];
+    dispatch_semaphore_wait(done, DISPATCH_TIME_FOREVER);
+    return result;
+}
+
+// One lookup round: ids -> icons saved; returns the ids without an entry.
+static NSArray<NSString *> *wq_store_fetch_batch(NSArray<NSString *> *ids, NSString *country, NSMutableArray<NSString *> *saved)
+{
+    NSURL *lookup = WQStoreIconsLookupURL(ids, country);
+    NSData *json = lookup ? wq_store_get(lookup, WQStoreIconsMaxResponseBytes) : nil;
+    if (!json) return nil;   // network or server trouble: nothing is marked missing
+    NSDictionary<NSString *, NSURL *> *art = WQStoreIconsArtwork(json, ids);
+    NSMutableArray<NSString *> *missing = [NSMutableArray new];
+    for (NSString *bid in ids) {
+        NSURL *url = art[bid];
+        if (!url) { [missing addObject:bid]; continue; }
+        NSData *png = wq_store_get(url, WQStoreIconsMaxIconBytes);
+        UIImage *image = png ? [UIImage imageWithData:png scale:1] : nil;
+        if (!image.CGImage) continue;   // try again next launch
+        NSData *stored = UIImagePNGRepresentation(image);
+        if (stored.length && stored.length <= WQStoreIconsMaxIconBytes && [stored writeToFile:wq_store_file(bid) atomically:YES]) {
+            [wq_store_images() setObject:image forKey:bid];
+            [saved addObject:bid];
+        }
+    }
+    return missing;
+}
+
+static void wq_store_flush(void)
+{
+    gStoreFlushScheduled = NO;
+    if (!wq_store_icons_enabled() || !gStorePending.count) return;
+    NSArray<NSString *> *all = [gStorePending.array copy];   // .array is a live view of the set
+    [gStorePending removeAllObjects];
+    [gStoreBusy addObjectsFromArray:all];
+    NSString *country = WQStoreIconsCountry([NSLocale.currentLocale objectForKey:NSLocaleCountryCode]);
+    dispatch_async(wq_store_fetch_queue(), ^{
+        NSFileManager *fm = NSFileManager.defaultManager;
+        NSURL *dir = [NSURL fileURLWithPath:wq_store_dir() isDirectory:YES];
+        [fm createDirectoryAtURL:dir withIntermediateDirectories:YES attributes:nil error:NULL];
+        [dir setResourceValue:@YES forKey:NSURLIsExcludedFromBackupKey error:NULL];
+        NSMutableArray<NSString *> *missed = [NSMutableArray new];
+        NSUInteger asked = 0, found = 0;
+        for (NSUInteger i = 0; i < all.count && wq_store_icons_enabled(); i += WQStoreIconsBatch) {
+            NSArray<NSString *> *batch = [all subarrayWithRange:NSMakeRange(i, MIN((NSUInteger)WQStoreIconsBatch, all.count - i))];
+            NSMutableArray<NSString *> *saved = [NSMutableArray new];
+            NSArray<NSString *> *missing = wq_store_fetch_batch(batch, country, saved);
+            // Not in this region's store: the US store has most apps.
+            if (missing.count && ![country isEqualToString:@"us"]) missing = wq_store_fetch_batch(missing, @"us", saved);
+            asked += batch.count;
+            found += saved.count;
+            if (missing) [missed addObjectsFromArray:missing];
+            if (saved.count) wq_store_announce(saved);
+        }
+        wq_log(@"store icons: %lu asked (%@), %lu found, %lu not in the App Store",
+               (unsigned long)asked, country, (unsigned long)found, (unsigned long)missed.count);
+        dispatch_async(wq_store_state(), ^{
+            [gStoreBusy minusSet:[NSSet setWithArray:all]];
+            if (!missed.count) return;
+            NSDate *now = NSDate.date;
+            for (NSString *bid in missed) gStoreMisses[bid] = now;
+            NSMutableDictionary *plist = [NSMutableDictionary new];
+            [gStoreMisses enumerateKeysAndObjectsUsingBlock:^(NSString *bid, NSDate *when, BOOL *__unused stop) {
+                if (-when.timeIntervalSinceNow < WQStoreIconsMissRetry) plist[bid] = when;
+            }];
+            [plist writeToFile:wq_store_misses_file() atomically:YES];
+        });
+    });
+}
+
+static void wq_store_request(NSString *bundleID)
+{
+    dispatch_async(wq_store_state(), ^{
+        if (!gStorePending) {
+            gStorePending = [NSMutableOrderedSet new];
+            gStoreBusy = [NSMutableSet new];
+        }
+        if (!gStoreMisses) {
+            NSDictionary *plist = [NSDictionary dictionaryWithContentsOfFile:wq_store_misses_file()];
+            gStoreMisses = [NSMutableDictionary new];
+            [plist enumerateKeysAndObjectsUsingBlock:^(id bid, id when, BOOL *__unused stop) {
+                if ([bid isKindOfClass:NSString.class] && [when isKindOfClass:NSDate.class]) gStoreMisses[bid] = when;
+            }];
+        }
+        NSDate *missed = gStoreMisses[bundleID];
+        if (missed && -missed.timeIntervalSinceNow < WQStoreIconsMissRetry) return;
+        if ([gStoreBusy containsObject:bundleID] || [wq_store_images() objectForKey:bundleID]) return;
+        if ([NSFileManager.defaultManager fileExistsAtPath:wq_store_file(bundleID)]) return;
+        [gStorePending addObject:bundleID];
+        if (gStoreFlushScheduled) return;
+        gStoreFlushScheduled = YES;
+        // Collect a whole list pass into few requests.
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.5 * NSEC_PER_SEC)), wq_store_state(), ^{ wq_store_flush(); });
+    });
+}
+
+// The App Store icon for bundleID when the setting is on: from memory, or (off
+// the main thread) from disk; a miss off the main thread asks the App Store.
+static UIImage *_Nullable wq_store_icon(NSString *bundleID, BOOL background)
+{
+    if (!wq_store_icons_enabled() || !WQStoreIconsEligible(bundleID)) return nil;
+    UIImage *image = [wq_store_images() objectForKey:bundleID];
+    if (image) return image;
+    dispatch_async(wq_store_state(), ^{ wq_store_preload(); });
+    if (!background) return nil;
+    image = wq_store_load_file(bundleID);
+    if (image) { [wq_store_images() setObject:image forKey:bundleID]; return image; }
+    wq_store_request(bundleID);
+    return nil;
+}
+
+void wq_reload_visible_rows(UITableView *tableView)
+{
+    if (!tableView.window || tableView.isEditing) return;
+    NSArray<NSIndexPath *> *rows = tableView.indexPathsForVisibleRows;
+    if (rows.count) [tableView reloadRowsAtIndexPaths:rows withRowAnimation:UITableViewRowAnimationNone];
+}
+
 // Rounded app icon for a bundle id, cached. Falls back to the closest parent
 // app's icon (extensions: com.foo.app.widget -> com.foo.app), then to a
 // neutral service tile. Nil only without a bundle id.
@@ -291,7 +536,16 @@ UIImage *wq_app_icon(NSString *bundleID)
     if (!bundleID.length) return nil;
     static NSCache *cache;
     static dispatch_once_t once;
-    dispatch_once(&once, ^{ cache = [NSCache new]; });
+    dispatch_once(&once, ^{
+        cache = [NSCache new];
+        // App Store icons arrived (or the setting changed): drop the tiles.
+        [NSNotificationCenter.defaultCenter addObserverForName:WQStoreIconsChangedNotification object:nil queue:nil
+                                                    usingBlock:^(NSNotification *note) {
+            NSArray *ids = note.userInfo[@"ids"];
+            if (![ids isKindOfClass:NSArray.class]) { [cache removeAllObjects]; return; }
+            for (NSString *bid in ids) [cache removeObjectForKey:bid];
+        }];
+    });
     UIImage *cached = [cache objectForKey:bundleID];
     if (cached) return cached;
     // The bundle fallback reads files and may ask for access: never on the
@@ -317,6 +571,7 @@ UIImage *wq_app_icon(NSString *bundleID)
         NSString *parent = [[parts subarrayWithRange:NSMakeRange(0, (NSUInteger)n)] componentsJoinedByString:@"."];
         raw = wq_real_icon(parent) ?: (background ? wq_bundle_icon(parent) : nil);
     }
+    if (!raw && [appID isEqualToString:bundleID]) raw = wq_store_icon(bundleID, background);
     UIImage *icon = raw ? wq_round_icon(raw) : wq_service_tile(bundleID);
     if (raw || background) [cache setObject:icon forKey:bundleID];
     return icon;

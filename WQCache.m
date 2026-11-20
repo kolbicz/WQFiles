@@ -530,6 +530,8 @@ static BOOL WQCacheValidateItem(WQCacheItem *item, NSString **reason)
     return @{@"rows": saved, @"note": note ?: @""};
 }
 
+- (void)storeIconsChanged:(NSNotification *)note { (void)note; wq_reload_visible_rows(self.tableView); }
+
 - (void)scanTaskChanged:(NSNotification *__unused)notification
 {
     if (_cleaning) return;
@@ -608,6 +610,7 @@ static BOOL WQCacheValidateItem(WQCacheItem *item, NSString **reason)
     [self.refreshControl addTarget:self action:@selector(userRefresh) forControlEvents:UIControlEventValueChanged];
     _scanTask = [WQScanTask taskNamed:@"clean"];
     [NSNotificationCenter.defaultCenter addObserver:self selector:@selector(scanTaskChanged:) name:WQScanTaskChangedNotification object:_scanTask];
+    [NSNotificationCenter.defaultCenter addObserver:self selector:@selector(storeIconsChanged:) name:WQStoreIconsChangedNotification object:nil];
     [self scanTaskChanged:nil];
     if (!_scanTask.running && !_scanTask.userPaused && (!_scanTask.result || _scanTask.interrupted)) {
         _resumeScan = _scanTask.interrupted;

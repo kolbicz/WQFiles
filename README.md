@@ -22,7 +22,7 @@ remembered). Internal Daemons aren't in that database: the first scan for them
 takes long, later ones only check new files. Apps, backups, restores, clearing
 app data, the Cache Cleaner and the file browser work as on iOS 27. App icons
 don't: iOS 26 hands WQ Files only placeholder icons and doesn't let it read
-other apps' bundles, so apps show symbol tiles.
+other apps' bundles, so apps show a placeholder (see App Store Icons below).
 
 WQ Files is available in English, German, Italian, Spanish, Portuguese
 (Brazil), Russian, Polish, Turkish, Thai, Vietnamese, Korean, Arabic, Japanese and Simplified Chinese. It follows
@@ -202,8 +202,16 @@ new files.
 
 App names come from LaunchServices' own database, read from lsd's container
 (the LaunchServices API itself refuses this app on 27.x). Apple services that
-only have localized names use a built-in table. Services without an icon get a
-symbol tile.
+only have localized names use a built-in table. Apple services without an icon
+get a symbol tile.
+
+Other apps' icons can't be read with worse_query, so they show a neutral
+placeholder. **Settings → App Store Icons** (off by default) fetches them from
+Apple's public App Store lookup instead: one request per 50 apps, in your
+region's store and then the US store. This sends the bundle IDs of your apps
+and your region to Apple. Icons are kept as small PNGs (a few KB each) and not
+backed up; sideloaded or removed apps keep the placeholder, and are asked
+for again after a week. Turning the setting off deletes the downloaded icons.
 
 ## Custom inspectors
 

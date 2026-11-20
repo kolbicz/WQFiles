@@ -1133,3 +1133,5 @@
 "Select by Hand" = "手動で選択";
 "Select Automatically" = "自動で選択";
 "Always Select: it's selected after every scan and by Select All, like caches. Select by Hand: you pick it each time. You can change this later by touching and holding it in the Cache Cleaner.\n\nOnly add what the app can do without: anything it keeps there (drafts, downloads, logins) is gone once cleaned." = "常に選択: キャッシュと同じように、スキャンのたびに、また「すべて選択」で選択されます。手動で選択: 毎回自分で選びます。あとでキャッシュクリーナーで長押しして変更できます。\n\nApp がなくても困らないものだけを追加してください。そこに保存されているもの（下書き、ダウンロード、ログイン）はクリーン後に失われます。";
+"App Store Icons" = "App Store のアイコン";
+"App Store Icons: other apps' icons can't be read with worse_query. When on, WQ Files asks Apple's App Store for them, which sends the ids of your apps and your region to Apple. Sideloaded apps keep the placeholder." = "App Store のアイコン: 他の App のアイコンは worse_query では読み取れません。オンにすると、WQ Files が Apple の App Store からアイコンを取得します。その際、App の ID と地域が Apple に送信されます。サイドロードした App はプレースホルダのままです。";

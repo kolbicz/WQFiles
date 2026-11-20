@@ -1137,3 +1137,5 @@
 "Select by Hand" = "เลือกเอง";
 "Select Automatically" = "เลือกอัตโนมัติ";
 "Always Select: it's selected after every scan and by Select All, like caches. Select by Hand: you pick it each time. You can change this later by touching and holding it in the Cache Cleaner.\n\nOnly add what the app can do without: anything it keeps there (drafts, downloads, logins) is gone once cleaned." = "เลือกเสมอ: จะถูกเลือกหลังการสแกนทุกครั้งและเมื่อกดเลือกทั้งหมด เหมือนแคช เลือกเอง: คุณเลือกเองทุกครั้ง เปลี่ยนภายหลังได้โดยกดค้างที่รายการในตัวล้างแคช\n\nเพิ่มเฉพาะสิ่งที่แอปไม่จำเป็นต้องมี: สิ่งที่แอปเก็บไว้ที่นั่น (แบบร่าง ไฟล์ดาวน์โหลด การลงชื่อเข้าใช้) จะหายไปหลังล้าง";
+"App Store Icons" = "ไอคอนจาก App Store";
+"App Store Icons: other apps' icons can't be read with worse_query. When on, WQ Files asks Apple's App Store for them, which sends the ids of your apps and your region to Apple. Sideloaded apps keep the placeholder." = "ไอคอนจาก App Store: ไม่สามารถอ่านไอคอนของแอปอื่นด้วย worse_query ได้ เมื่อเปิดใช้ WQ Files จะขอไอคอนจาก App Store ของ Apple ซึ่งจะส่ง ID ของแอปของคุณและภูมิภาคของคุณไปยัง Apple แอปที่ติดตั้งแบบไซด์โหลดจะยังใช้ไอคอนแทนที่";

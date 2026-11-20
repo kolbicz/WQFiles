@@ -83,6 +83,7 @@ compile_run WQScanRecoveryTests -DWQ_ACCESS_TESTING WQScanTask.m WQLocalization.
 compile_run WQScanInodeCheckpointTests WQLocalization.m tests/WQScanInodeCheckpointTests.m WQCore.m
 compile_run WQAppsCopyTests WQLocalization.m tests/WQAppsCopyTests.m WQCore.m
 compile_run WQAppsSupportTests tests/WQAppsSupportTests.m
+compile_run WQStoreIconsTests tests/WQStoreIconsTests.m
 compile_run WQCacheSafetyTests tests/WQCacheSafetyTests.m
 compile_run WQPlistEditorSupportTests tests/WQPlistEditorSupportTests.m
 compile_run WQHexViewerHelpersTests tests/WQHexViewerHelpersTests.m

@@ -110,6 +110,7 @@ static BOOL wq_show_item_counts(void)
 static NSString *const kWQShowFolderSizesPref = @"WQShowFolderSizes";
 static const NSTimeInterval kWQFolderSizeMaxAge = 600;
 static NSString *const kWQFolderSizesFooter = @"Show Folder Sizes: shows how much space each folder takes, measured in the background with the folders on screen first. Every file below each folder is read for this, so large folders and App Data take a while. Sizes are kept for ten minutes; pull down to measure again.";
+static NSString *const kWQStoreIconsFooter = @"App Store Icons: other apps' icons can't be read with worse_query. When on, WQ Files asks Apple's App Store for them, which sends the ids of your apps and your region to Apple. Sideloaded apps keep the placeholder.";
 static BOOL wq_show_folder_sizes(void)
 {
     return [NSUserDefaults.standardUserDefaults boolForKey:kWQShowFolderSizesPref];
@@ -1821,9 +1822,12 @@ static void wq_open_custom_inspector(UIViewController *host, NSString *path, UIV
     return self;
 }
 
+- (void)storeIconsChanged:(NSNotification *)note { (void)note; wq_reload_visible_rows(self.tableView); }
+
 - (void)viewDidLoad
 {
     [super viewDidLoad];
+    [NSNotificationCenter.defaultCenter addObserver:self selector:@selector(storeIconsChanged:) name:WQStoreIconsChangedNotification object:nil];
     if (wq_prism_enabled()) {
         wq_prism_install_background(self);
         self.tableView.backgroundColor = [UIColor clearColor];
@@ -6279,8 +6283,7 @@ static NSString *const kWQTroubleshootingFooter =
 
 - (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section
 {
-    // Rows 7 and 8: Background Color, and Default Colors once one is picked.
-    return section == 0 ? 8 : section == 1 ? 5 : 1;   // row 6: Show Folder Sizes, row 7: Theme; section 1 row 2: Inspectors
+    return section == 0 ? 9 : section == 1 ? 5 : 1;   // row 6: Show Folder Sizes, row 7: Theme, row 8: App Store Icons; section 1 row 2: Inspectors
 }
 
 - (NSString *)tableView:(UITableView *)tableView titleForHeaderInSection:(NSInteger)section
@@ -6293,12 +6296,13 @@ static NSString *const kWQTroubleshootingFooter =
     if (section == 2) return WQLocalized(kWQTroubleshootingFooter);
     if (section == 1) return WQLocalized(@"Sharing Password: a fixed password for Wi-Fi Sharing instead of a new random one each time. It is kept in the keychain.");
     if (section != 0) return nil;
-    return [NSString stringWithFormat:@"%@\n\n%@\n\n%@\n\n%@\n\n%@",
+    return [NSString stringWithFormat:@"%@\n\n%@\n\n%@\n\n%@\n\n%@\n\n%@",
             WQLocalized(@"Allow Deleting: when off, nothing can be deleted: no Delete or swipe to delete in folders and backups, no Clear Data in Apps and no cleaning in the Cache Cleaner. Saving, moving and restoring still work.\n\nShow Item Counts: shows how many items each folder holds. Every subfolder has to be listed for this, which slows down folders with many subfolders, especially in other apps' data."),
             WQLocalized(@"Keep Data Before Restore: restoring an app or file backup first backs up what's there now, so a failed restore can be undone. When off, that backup is deleted once the restore succeeded."),
             WQLocalized(@"Reopen Last Folder: WQ Files starts in the folder you were in. Check for Updates: twice a day WQ Files reads the public release list on GitHub and shows a note when a new version is out; nothing about your device is sent."),
             WQLocalized(@"Theme: the colors of the new design: the built-in ones, a color you pick, or themes you import."),
-            WQLocalized(kWQFolderSizesFooter)];
+            WQLocalized(kWQFolderSizesFooter),
+            WQLocalized(kWQStoreIconsFooter)];
 }
 
 - (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath
@@ -6319,6 +6323,19 @@ static NSString *const kWQTroubleshootingFooter =
             : WQLocalized([active isEqualToString:WQThemeCustomColor] ? @"Custom Color" : @"Default");
         cell.contentConfiguration = v;
         cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
+        return cell;
+    }
+    if (indexPath.section == 0 && indexPath.row == 8) {
+        c.text = WQLocalizedNullable(@"App Store Icons");
+        c.image = [UIImage systemImageNamed:@"app.badge"];
+        UISwitch *toggle = [UISwitch new];
+        toggle.on = wq_store_icons_enabled();
+        [toggle addAction:[UIAction actionWithHandler:^(UIAction *action) {
+            wq_set_store_icons_enabled(((UISwitch *)action.sender).isOn);
+        }] forControlEvents:UIControlEventValueChanged];
+        cell.contentConfiguration = c;
+        cell.accessoryView = toggle;
+        cell.selectionStyle = UITableViewCellSelectionStyleNone;
         return cell;
     }
     if (indexPath.section == 0) {
@@ -6881,7 +6898,7 @@ static NSString *const kWQTroubleshootingFooter =
 {
     // System Groups is the extra last row, on iOS 27 only.
     if (section == 3) return 1;
-    if (section == 2) return 9;   // row 7: Sharing Password, row 8: Show Folder Sizes
+    if (section == 2) return 10;   // row 7: Sharing Password, row 8: Show Folder Sizes, row 9: App Store Icons
     return section == 0 ? (NSInteger)_locations.count + (wq_system_areas_reachable() ? 1 : 0) : 10;
 }
 
@@ -6902,7 +6919,7 @@ static NSString *const kWQTroubleshootingFooter =
                 [NSString stringWithFormat:@"%@\n\n%@", WQLocalized(@"Keep Data Before Restore: restoring an app or file backup first backs up what's there now, so a failed restore can be undone. When off, that backup is deleted once the restore succeeded."),
                  [NSString stringWithFormat:@"%@\n\n%@\n\n%@", WQLocalized(@"Reopen Last Folder: WQ Files starts in the folder you were in. Check for Updates: twice a day WQ Files reads the public release list on GitHub and shows a note when a new version is out; nothing about your device is sent."),
                   WQLocalized(@"Sharing Password: a fixed password for Wi-Fi Sharing instead of a new random one each time. It is kept in the keychain."),
-                  WQLocalized(kWQFolderSizesFooter)]]];
+                  [NSString stringWithFormat:@"%@\n\n%@", WQLocalized(kWQFolderSizesFooter), WQLocalized(kWQStoreIconsFooter)]]]];
     return section == 1
         ? WQLocalized(@"Overwritten and deleted files are copied to Backups first (also visible in the Files app). Long-press a backup to restore it.")
         : nil;
@@ -6938,6 +6955,20 @@ static NSString *const kWQTroubleshootingFooter =
         v.secondaryText = wq_language_name(wq_chosen_language());
         cell.contentConfiguration = v;
         cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
+        return cell;
+    }
+    if (indexPath.section == 2 && indexPath.row == 9) {
+        c.text = WQLocalized(@"App Store Icons");
+        c.image = [UIImage systemImageNamed:@"app.badge"];
+        UISwitch *toggle = [UISwitch new];
+        toggle.on = wq_store_icons_enabled();
+        [toggle addAction:[UIAction actionWithHandler:^(UIAction *action) {
+            wq_set_store_icons_enabled(((UISwitch *)action.sender).isOn);
+        }] forControlEvents:UIControlEventValueChanged];
+        cell.contentConfiguration = c;
+        cell.accessoryType = UITableViewCellAccessoryNone;
+        cell.accessoryView = toggle;
+        cell.selectionStyle = UITableViewCellSelectionStyleNone;
         return cell;
     }
     if (indexPath.section == 2) {

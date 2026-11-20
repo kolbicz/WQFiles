@@ -581,6 +581,8 @@ static BOOL wq_dir_size_cancellable(NSString *dir, NSString *taskID, WQScanCance
     return @{@"rows": saved, @"note": note ?: @""};
 }
 
+- (void)storeIconsChanged:(NSNotification *)note { (void)note; wq_reload_visible_rows(self.tableView); }
+
 - (void)scanTaskChanged:(NSNotification *__unused)notification
 {
     if (_busy && !_scanning && !_scanTask.running) return; // preserve mutation progress
@@ -655,6 +657,7 @@ static BOOL wq_dir_size_cancellable(NSString *dir, NSString *taskID, WQScanCance
     [self.refreshControl addTarget:self action:@selector(userRefresh) forControlEvents:UIControlEventValueChanged];
     _scanTask = [WQScanTask taskNamed:@"apps"];
     [NSNotificationCenter.defaultCenter addObserver:self selector:@selector(scanTaskChanged:) name:WQScanTaskChangedNotification object:_scanTask];
+    [NSNotificationCenter.defaultCenter addObserver:self selector:@selector(storeIconsChanged:) name:WQStoreIconsChangedNotification object:nil];
     [self scanTaskChanged:nil];
     if (!_scanTask.running && !_scanTask.userPaused && (!_scanTask.result || _scanTask.interrupted)) {
         _resumeScan = _scanTask.interrupted;
