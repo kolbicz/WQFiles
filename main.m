@@ -4210,13 +4210,38 @@ static void wq_trace_navigation_bar(UINavigationController *nav, NSString *when)
     vc.navigationItem.leftBarButtonItem = home;
 }
 
-#if WQ_TOUCH_TRACE
+// On iOS 27 beta 5 / public beta 3 (24A5408d), the blurred band under the
+// navigation bar (a ScrollEdgeEffectView) keeps the height of the screen it
+// came back from — taller with a search field — and catches taps meant for the
+// rows under it (#70: after a swipe back, the Backups tab's first row stopped
+// responding). Release iOS doesn't do this. The band is decoration only, so
+// it never gets touches; on release iOS that changes nothing. Its too-tall
+// look on that beta stays: nothing public resets it.
+static void wq_pass_through_edge_effects(UIView *root)
+{
+    if (!root) return;
+    NSMutableArray<UIView *> *queue = [NSMutableArray arrayWithObject:root];
+    for (NSUInteger seen = 0; queue.count && seen < 600; seen++) {
+        UIView *v = queue.firstObject;
+        [queue removeObjectAtIndex:0];
+        if ([NSStringFromClass(v.class) containsString:@"ScrollEdgeEffect"]) {
+            v.userInteractionEnabled = NO;
+            continue;
+        }
+        [queue addObjectsFromArray:v.subviews];
+    }
+}
+
 - (void)navigationController:(UINavigationController *)nav didShowViewController:(UIViewController *)vc animated:(BOOL)animated
 {
     (void)animated;
+    wq_pass_through_edge_effects(vc.view);
+#if WQ_TOUCH_TRACE
     wq_trace_navigation_bar(nav, [NSString stringWithFormat:@"shown %@ \"%@\"", NSStringFromClass(vc.class), vc.title ?: @""]);
-}
+#else
+    (void)nav;
 #endif
+}
 
 - (BOOL)gestureRecognizerShouldBegin:(UIGestureRecognizer *)gestureRecognizer
 {
@@ -6430,6 +6455,12 @@ static NSString *const kWQTroubleshootingFooter =
 - (void)viewDidAppear:(BOOL)animated
 {
     [super viewDidAppear:animated];
+    // One turn later: after the navigation controller's didShow (edge effects).
+    dispatch_async(dispatch_get_main_queue(), ^{ [self traceRows]; });
+}
+
+- (void)traceRows
+{
     UITableView *t = self.tableView;
     for (NSInteger row = 0; row < 3; row++) {
         CGRect r = [t convertRect:[t rectForRowAtIndexPath:[NSIndexPath indexPathForRow:row inSection:0]] toView:nil];
