@@ -21,6 +21,15 @@
       "category": "utilities",
       "versions": [
         {
+          "version": "0.9.20",
+          "buildVersion": "114",
+          "date": "2026-11-21",
+          "size": 2199929,
+          "downloadURL": "https://github.com/kolbicz/WQFiles/releases/download/v0.9.20/WQFiles.ipa",
+          "localizedDescription": "Imports Apps Manager backups (.adbk), says when another app is using a file instead of showing errno 35, and keeps an app's database and its -wal/-shm files together.",
+          "minOSVersion": "26.0"
+        },
+        {
           "version": "0.9.19",
           "buildVersion": "113",
           "date": "2026-11-20",
