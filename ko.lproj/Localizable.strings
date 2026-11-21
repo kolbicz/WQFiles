@@ -1139,3 +1139,7 @@
 "Always Select: it's selected after every scan and by Select All, like caches. Select by Hand: you pick it each time. You can change this later by touching and holding it in the Cache Cleaner.\n\nOnly add what the app can do without: anything it keeps there (drafts, downloads, logins) is gone once cleaned." = "항상 선택: 캐시처럼 스캔할 때마다, 그리고 모두 선택 시 선택됩니다. 직접 선택: 매번 직접 고릅니다. 나중에 캐시 정리기에서 길게 눌러 바꿀 수 있습니다.\n\n앱에 없어도 되는 것만 추가하세요. 앱이 그곳에 보관하는 것(임시 저장본, 다운로드, 로그인)은 정리 후 사라집니다.";
 "App Store Icons" = "App Store 아이콘";
 "App Store Icons: other apps' icons can't be read with worse_query. When on, WQ Files asks Apple's App Store for them, which sends the ids of your apps and your region to Apple. Sideloaded apps keep the placeholder." = "App Store 아이콘: 다른 앱의 아이콘은 worse_query로 읽을 수 없습니다. 켜면 WQ Files가 Apple의 App Store에서 아이콘을 가져오며, 이때 앱 ID와 지역이 Apple로 전송됩니다. 사이드로드한 앱은 기본 아이콘이 그대로 표시됩니다.";
+"Another app is using this file and has locked it. Quit that app and try again." = "다른 앱이 이 파일을 사용 중이며 잠갔습니다. 해당 앱을 종료한 다음 다시 시도하십시오.";
+"Not changed: %@ belongs to the same SQLite database and another app is using it. Its files are only changed together. Quit that app and try again." = "변경되지 않음: %@ 파일이 같은 SQLite 데이터베이스에 속하며 다른 앱이 사용 중입니다. 데이터베이스 파일은 함께만 변경됩니다. 해당 앱을 종료한 다음 다시 시도하십시오.";
+"Not changed: %@ of the same SQLite database failed, and its files are only changed together." = "변경되지 않음: 같은 SQLite 데이터베이스의 %@ 파일이 실패했으며, 데이터베이스 파일은 함께만 변경됩니다.";
+"%lu of %lu files were imported.\n\n%@" = "%lu/%lu개 파일을 가져왔습니다.\n\n%@";

@@ -110,6 +110,27 @@ BOOL wq_create_dir(NSString *path, NSString *_Nullable *_Nullable errorText);
 NSDictionary<NSString *, NSNumber *> *_Nullable wq_item_identity(NSString *path);
 NSDictionary<NSString *, NSNumber *> *wq_identity_for_stat(const struct stat *st);
 
+// SQLite database sets: "x", "x-wal", "x-shm" and "x-journal" belong together.
+// An app with the database open locks x and x-shm but not x-wal, so changing
+// any one of them alone while it runs loses data. Writes, replaces and deletes
+// refuse every file of a set another process has locked (a readable reason).
+// The base name of a set ("x" for x, x-wal, x-shm, x-journal).
+NSString *wq_sqlite_family_base(NSString *name);
+BOOL wq_sqlite_is_companion(NSString *name);
+// Indices into `paths`: every database before the -wal/-shm/-journal files,
+// otherwise in the given order, so a batch can skip the rest of a set whose
+// database failed.
+NSArray<NSNumber *> *wq_sqlite_family_order(NSArray<NSString *> *paths);
+// The name of the first file of path's set (in its folder) that another
+// process holds a lock on; nil when none does.
+NSString *_Nullable wq_sqlite_family_locked_member(NSString *path);
+// Why `name` is not changed when `lockedName` of its set is in use; nil
+// when lockedName is nil.
+NSString *_Nullable wq_sqlite_family_refusal_text(NSString *name, NSString *_Nullable lockedName);
+NSString *_Nullable wq_sqlite_family_refusal(NSString *path);
+// Why a file is skipped after `failedName` of its set could not be changed.
+NSString *wq_sqlite_family_skipped_text(NSString *failedName);
+
 // Deletes a file (backed up first) or an empty folder.
 BOOL wq_delete(NSString *path, NSString *_Nullable *_Nullable errorText);
 BOOL wq_delete_expecting(NSString *path, NSDictionary<NSString *, NSNumber *> *_Nullable identity,

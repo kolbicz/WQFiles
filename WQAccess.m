@@ -822,6 +822,95 @@ static BOOL wq_changed(NSString **errorText)
     return NO;
 }
 
+#pragma mark - Files in use, SQLite database sets
+
+// EWOULDBLOCK from a non-blocking flock: another process holds a lock on the
+// file. On Apple systems flock and fcntl locks conflict, so this is also what
+// an app's open SQLite connection looks like (it showed as "errno 35").
+static NSString *wq_in_use_text(void)
+{
+    return WQLocalized(@"Another app is using this file and has locked it. Quit that app and try again.");
+}
+
+static NSString *wq_lock_error(int err)
+{
+    return err == EWOULDBLOCK ? wq_in_use_text() : wq_errno(err);
+}
+
+static NSArray<NSString *> *wq_sqlite_companion_suffixes(void)
+{
+    return @[@"-wal", @"-shm", @"-journal"];
+}
+
+NSString *wq_sqlite_family_base(NSString *name)
+{
+    for (NSString *suffix in wq_sqlite_companion_suffixes()) {
+        if (name.length > suffix.length && [name hasSuffix:suffix]) return [name substringToIndex:name.length - suffix.length];
+    }
+    return name;
+}
+
+BOOL wq_sqlite_is_companion(NSString *name)
+{
+    return ![wq_sqlite_family_base(name) isEqualToString:name];
+}
+
+NSArray<NSNumber *> *wq_sqlite_family_order(NSArray<NSString *> *paths)
+{
+    NSMutableArray<NSNumber *> *order = [NSMutableArray arrayWithCapacity:paths.count];
+    for (int companions = 0; companions < 2; companions++) {
+        for (NSUInteger i = 0; i < paths.count; i++) {
+            if (wq_sqlite_is_companion(paths[i].lastPathComponent) == (companions == 1)) [order addObject:@(i)];
+        }
+    }
+    return order;
+}
+
+// Whether another process holds a lock on the regular file at `path`. A file
+// that can't be opened (missing, refused) is not "in use": the operation
+// itself reports why it fails. Only this probe's own lock is ever taken, and
+// it is released at once.
+static BOOL wq_locked_by_other(NSString *path)
+{
+    const char *p = path.fileSystemRepresentation;
+    int fd = WQOpenRegularAt(AT_FDCWD, p, O_RDONLY, 0);
+    if (fd < 0 && wq_is_denied(errno) && wq_grant(path.stringByDeletingLastPathComponent)) fd = WQOpenRegularAt(AT_FDCWD, p, O_RDONLY, 0);
+    if (fd < 0 && wq_is_denied(errno) && wq_grant(path)) fd = WQOpenRegularAt(AT_FDCWD, p, O_RDONLY, 0);
+    if (fd < 0) return NO;
+    BOOL locked = flock(fd, LOCK_EX | LOCK_NB) != 0 && errno == EWOULDBLOCK;
+    close(fd);
+    return locked;
+}
+
+NSString *wq_sqlite_family_locked_member(NSString *path)
+{
+    NSString *dir = path.stringByDeletingLastPathComponent;
+    NSString *base = wq_sqlite_family_base(path.lastPathComponent);
+    NSMutableArray<NSString *> *names = [NSMutableArray arrayWithObject:base];
+    for (NSString *suffix in wq_sqlite_companion_suffixes()) [names addObject:[base stringByAppendingString:suffix]];
+    for (NSString *name in names) {
+        if (wq_locked_by_other([dir stringByAppendingPathComponent:name])) return name;
+    }
+    return nil;
+}
+
+NSString *wq_sqlite_family_refusal_text(NSString *name, NSString *lockedName)
+{
+    if (!lockedName) return nil;
+    if ([lockedName isEqualToString:name]) return wq_in_use_text();
+    return WQLocalizedFormat(@"Not changed: %@ belongs to the same SQLite database and another app is using it. Its files are only changed together. Quit that app and try again.", lockedName);
+}
+
+NSString *wq_sqlite_family_refusal(NSString *path)
+{
+    return wq_sqlite_family_refusal_text(path.lastPathComponent, wq_sqlite_family_locked_member(path));
+}
+
+NSString *wq_sqlite_family_skipped_text(NSString *failedName)
+{
+    return WQLocalizedFormat(@"Not changed: %@ of the same SQLite database failed, and its files are only changed together.", failedName);
+}
+
 typedef struct {
     int fd;
     int parent;
@@ -868,12 +957,21 @@ static BOOL wq_mutation_open(NSString *path, NSDictionary *expected, WQMutation 
             mutation->fd = WQOpenRegularAt(mutation->parent, path.lastPathComponent.fileSystemRepresentation, flags, 0);
     }
     if (mutation->fd < 0) { if (errorText) *errorText = wq_errno(errno); wq_mutation_close(mutation); return NO; }
+    // Before taking our own lock (the probe would see it). A live database's
+    // -wal is not locked by SQLite, only the main file and -shm are: changing
+    // one file of a set another app has open loses its committed rows.
+    NSString *refusal = wq_sqlite_family_refusal(path);
+    if (refusal) {
+        wq_log(@"%@: in use by another process (SQLite set)", path);
+        if (errorText) *errorText = refusal;
+        wq_mutation_close(mutation); return NO;
+    }
     if (flock(mutation->fd, LOCK_EX | LOCK_NB) != 0) {
         int err = errno;
         // Some providers do not implement locks. Keep descriptor/version checks;
         // this is advisory serialization, not atomicity against other writers.
         if (err != ENOTSUP && err != EOPNOTSUPP && err != ENOSYS) {
-            if (errorText) *errorText = wq_errno(err);
+            if (errorText) *errorText = wq_lock_error(err);
             wq_mutation_close(mutation); return NO;
         }
         wq_log(@"advisory locking unsupported: %@", path);
@@ -1226,6 +1324,10 @@ BOOL wq_create_file_from(NSString *path, NSString *source, NSString **errorText)
         if (errorText) *errorText = WQLocalized(@"Invalid file path");
         return NO;
     }
+    // A new -wal or -journal next to a database another app has open would be
+    // read as part of it.
+    NSString *refusal = wq_sqlite_is_companion(path.lastPathComponent) ? wq_sqlite_family_refusal(path) : nil;
+    if (refusal) { if (errorText) *errorText = refusal; return NO; }
     int in = wq_open(source, O_RDONLY, 0);
     if (in < 0) { if (errorText) *errorText = wq_errno(errno); return NO; }
     NSString *parentPath = path.stringByDeletingLastPathComponent;
@@ -1630,11 +1732,17 @@ static BOOL wq_delete_regular_at(int dir, NSString *path, const struct stat *st,
         if (errorText) *errorText = wq_errno(err);
         return NO;
     }
+    NSString *refusal = wq_sqlite_family_refusal(path);
+    if (refusal) {
+        wq_mutation_close(&mutation);
+        if (errorText) *errorText = refusal;
+        return NO;
+    }
     if (flock(mutation.fd, LOCK_EX | LOCK_NB) != 0) {
         int err = errno;
         if (err != ENOTSUP && err != EOPNOTSUPP && err != ENOSYS) {
             wq_mutation_close(&mutation);
-            if (errorText) *errorText = wq_errno(err);
+            if (errorText) *errorText = wq_lock_error(err);
             return NO;
         }
     }

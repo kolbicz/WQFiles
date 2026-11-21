@@ -2533,6 +2533,13 @@ static void wq_open_custom_inspector(UIViewController *host, NSString *path, UIV
     } failure:WQLocalizedNullable(@"Cannot move")];
 }
 
+// Which SQLite set a selected file belongs to: its folder and base name.
+static NSString *wq_sqlite_set_key(NSString *path)
+{
+    return [path.stringByDeletingLastPathComponent stringByAppendingPathComponent:
+            wq_sqlite_family_base(path.lastPathComponent)].lowercaseString;
+}
+
 - (void)deleteSelectedFiles
 {
     if (wq_refuse_if_deleting_off(self)) return;
@@ -2559,11 +2566,17 @@ static void wq_open_custom_inspector(UIViewController *host, NSString *path, UIV
         [self runIO:^BOOL(NSString **error) {
             NSUInteger failed = 0;
             NSString *first = nil;
-            for (NSUInteger i = 0; i < paths.count; i++) {
+            // Each SQLite database before its -wal/-shm, which are skipped
+            // when the database itself was not deleted: the set stays whole.
+            NSMutableDictionary<NSString *, NSString *> *failedSets = [NSMutableDictionary new];
+            for (NSNumber *index in wq_sqlite_family_order(paths)) {
+                NSUInteger i = index.unsignedIntegerValue;
                 NSString *path = paths[i];
-                NSString *e = nil;
-                if (!wq_delete_expecting(path, wq_identity_at(identities, i), &e)) {
+                NSString *set = wq_sqlite_set_key(path);
+                NSString *e = failedSets[set] ? wq_sqlite_family_skipped_text(failedSets[set]) : nil;
+                if (e || !wq_delete_expecting(path, wq_identity_at(identities, i), &e)) {
                     failed++;
+                    if (!failedSets[set]) failedSets[set] = path.lastPathComponent;
                     if (!first) first = [NSString stringWithFormat:@"%@: %@", path.lastPathComponent, e ?: @"failed"];
                 }
             }
@@ -3824,13 +3837,21 @@ static NSString *wq_free_name_in(NSString *dir, NSString *name, NSMutableSet<NSS
         NSMutableSet<NSString *> *claimed = [NSMutableSet new];
         NSUInteger done = 0, renamed = 0, replaced = 0;
         NSString *first = nil;
-        for (NSString *source in sources) {
+        // An imported SQLite database goes in before its -wal/-shm, which are
+        // skipped when it fails: a -wal on top of another database corrupts it.
+        NSMutableDictionary<NSString *, NSString *> *failedSets = [NSMutableDictionary new];
+        for (NSNumber *index in wq_sqlite_family_order(sources)) {
+            NSString *source = sources[index.unsignedIntegerValue];
             NSString *e = nil;
             NSString *existing = [dir stringByAppendingPathComponent:source.lastPathComponent];
             NSDictionary *expected = versions[source];
             BOOL ok;
             NSString *name = source.lastPathComponent;
-            if (expected && ![claimed containsObject:name.lowercaseString]) {
+            NSString *set = wq_sqlite_family_base(name).lowercaseString;
+            if (failedSets[set]) {
+                e = wq_sqlite_family_skipped_text(failedSets[set]);
+                ok = NO;
+            } else if (expected && ![claimed containsObject:name.lowercaseString]) {
                 ok = wq_write_from_file_if_unchanged(existing, source, expected, &e);
                 [claimed addObject:name.lowercaseString];
                 if (ok) replaced++;
@@ -3841,13 +3862,16 @@ static NSString *wq_free_name_in(NSString *dir, NSString *name, NSMutableSet<NSS
             }
             [NSFileManager.defaultManager removeItemAtPath:source error:nil];
             if (ok) done++;
-            else if (!first) first = [NSString stringWithFormat:@"%@: %@", source.lastPathComponent, e ?: @"no free name"];
+            else {
+                if (!failedSets[set]) failedSets[set] = name;
+                if (!first) first = [NSString stringWithFormat:@"%@: %@", source.lastPathComponent, e ?: @"no free name"];
+            }
         }
         wq_log(@"import: %lu of %lu files into %@ (%lu replaced, %lu renamed)", (unsigned long)done, (unsigned long)sources.count,
                dir, (unsigned long)replaced, (unsigned long)renamed);
         if (done < sources.count) {
-            *error = [NSString stringWithFormat:@"%lu of %lu files were imported.\n\n%@",
-                      (unsigned long)done, (unsigned long)sources.count, first];
+            *error = WQLocalizedFormat(@"%lu of %lu files were imported.\n\n%@",
+                      (unsigned long)done, (unsigned long)sources.count, first);
             return NO;
         }
         if (renamed) *note = WQLocalizedFormat(@"Imported %lu files. %lu had a name that was already taken and got a number added.",

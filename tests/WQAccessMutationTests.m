@@ -304,6 +304,43 @@ int main(void)
             check(wq_delete(dirLink, &error) && [fm fileExistsAtPath:targetDir] && [fm fileExistsAtPath:targetFile],
                   @"deleting a directory symlink removes only the link");
 
+            // SQLite sets: an app with the database open locks x and x-shm, not x-wal.
+            check([wq_sqlite_family_base(@"a.sqlite-wal") isEqual:@"a.sqlite"] && [wq_sqlite_family_base(@"a.sqlite-shm") isEqual:@"a.sqlite"] &&
+                  [wq_sqlite_family_base(@"a.db-journal") isEqual:@"a.db"] && [wq_sqlite_family_base(@"a.sqlite") isEqual:@"a.sqlite"] &&
+                  [wq_sqlite_family_base(@"-wal") isEqual:@"-wal"], @"SQLite set base names");
+            check([wq_sqlite_family_order(@[@"/d/a.sqlite-wal", @"/d/b.txt", @"/d/a.sqlite", @"/d/a.sqlite-shm"])
+                   isEqual:@[@1, @2, @0, @3]], @"databases are ordered before their -wal/-shm");
+            NSString *liveDir = [base stringByAppendingPathComponent:@"live-db"];
+            check([fm createDirectoryAtPath:liveDir withIntermediateDirectories:NO attributes:nil error:nil], @"create SQLite set folder");
+            NSString *db = [liveDir stringByAppendingPathComponent:@"analytics.sqlite"];
+            NSString *wal = [db stringByAppendingString:@"-wal"], *shm = [db stringByAppendingString:@"-shm"];
+            put(db, @"db"); put(wal, @"wal"); put(shm, @"shm");
+            NSString *unrelated = [liveDir stringByAppendingPathComponent:@"other.sqlite-wal"];
+            put(unrelated, @"other");
+            check(wq_sqlite_family_locked_member(wal) == nil && wq_sqlite_family_refusal(db) == nil, @"idle SQLite set is not in use");
+            int app = open(db.fileSystemRepresentation, O_RDWR);
+            check(app >= 0 && flock(app, LOCK_EX | LOCK_NB) == 0, @"another process holds the database lock");
+            check([wq_sqlite_family_locked_member(wal) isEqual:@"analytics.sqlite"], @"the locked member of the set is named");
+            error = nil;
+            check(!wq_delete(db, &error) && has(db, @"db") &&
+                  [error isEqual:WQLocalized(@"Another app is using this file and has locked it. Quit that app and try again.")],
+                  @"a locked database is refused with a readable reason, not errno 35");
+            error = nil;
+            check(!wq_delete(wal, &error) && has(wal, @"wal") && [error containsString:@"analytics.sqlite"] && ![error containsString:@"errno"],
+                  @"the unlocked -wal of a database in use is not deleted");
+            NSString *replacement = [base stringByAppendingPathComponent:@"replacement-wal"];
+            put(replacement, @"new wal");
+            check(!wq_write_from_file(wal, replacement, &error) && has(wal, @"wal"), @"the -wal of a database in use is not replaced");
+            check(!wq_create_file_from([db stringByAppendingString:@"-journal"], replacement, &error) &&
+                  ![fm fileExistsAtPath:[db stringByAppendingString:@"-journal"]], @"no -journal is created next to a database in use");
+            check(wq_delete(unrelated, &error) && ![fm fileExistsAtPath:unrelated], @"other sets in the same folder are unaffected");
+            check(!wq_delete_tree(liveDir, nil, nil, NULL, NULL, &error) && has(db, @"db") && has(wal, @"wal") && has(shm, @"shm"),
+                  @"a folder delete stops before any file of a database in use");
+            close(app);
+            check(wq_sqlite_family_locked_member(wal) == nil, @"the set is free once the app lets go");
+            check(wq_delete(wal, &error) && wq_delete(db, &error) && ![fm fileExistsAtPath:wal] && ![fm fileExistsAtPath:db],
+                  @"an idle SQLite set is deleted normally");
+
             check(wq_enumerate([base stringByAppendingPathComponent:@"absent"], 1, nil, nil) == nil, @"missing enumeration base is failure, not empty success");
             wq_test_volume_limit = 0;
             check(wq_enumerate(base, 0, nil, nil) == nil, @"unavailable inode probe is failure, not silent fixed-range success");

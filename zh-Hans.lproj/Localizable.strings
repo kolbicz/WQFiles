@@ -1139,3 +1139,7 @@
 "Always Select: it's selected after every scan and by Select All, like caches. Select by Hand: you pick it each time. You can change this later by touching and holding it in the Cache Cleaner.\n\nOnly add what the app can do without: anything it keeps there (drafts, downloads, logins) is gone once cleaned." = "始终选择：像缓存一样，在每次扫描后以及“全选”时被选中。手动选择：每次由你自己选择。之后可在缓存清理中按住它来更改。\n\n只添加 App 可以舍弃的内容：它保存在那里的东西（草稿、下载、登录）清理后将会丢失。";
 "App Store Icons" = "App Store 图标";
 "App Store Icons: other apps' icons can't be read with worse_query. When on, WQ Files asks Apple's App Store for them, which sends the ids of your apps and your region to Apple. Sideloaded apps keep the placeholder." = "App Store 图标：worse_query 无法读取其他 App 的图标。开启后，WQ Files 会向 Apple 的 App Store 获取图标，这会把你的 App 的 ID 和你所在的地区发送给 Apple。侧载的 App 仍显示占位图标。";
+"Another app is using this file and has locked it. Quit that app and try again." = "另一个 App 正在使用此文件并已将其锁定。请退出该 App 后重试。";
+"Not changed: %@ belongs to the same SQLite database and another app is using it. Its files are only changed together. Quit that app and try again." = "未更改：%@ 属于同一个 SQLite 数据库，且另一个 App 正在使用它。数据库的文件只会一起更改。请退出该 App 后重试。";
+"Not changed: %@ of the same SQLite database failed, and its files are only changed together." = "未更改：同一个 SQLite 数据库中的 %@ 失败，数据库的文件只会一起更改。";
+"%lu of %lu files were imported.\n\n%@" = "已导入 %lu 个文件（共 %lu 个）。\n\n%@";
