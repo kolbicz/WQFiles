@@ -1143,3 +1143,6 @@
 "Not changed: %@ belongs to the same SQLite database and another app is using it. Its files are only changed together. Quit that app and try again." = "변경되지 않음: %@ 파일이 같은 SQLite 데이터베이스에 속하며 다른 앱이 사용 중입니다. 데이터베이스 파일은 함께만 변경됩니다. 해당 앱을 종료한 다음 다시 시도하십시오.";
 "Not changed: %@ of the same SQLite database failed, and its files are only changed together." = "변경되지 않음: 같은 SQLite 데이터베이스의 %@ 파일이 실패했으며, 데이터베이스 파일은 함께만 변경됩니다.";
 "%lu of %lu files were imported.\n\n%@" = "%lu/%lu개 파일을 가져왔습니다.\n\n%@";
+"This Apps Manager backup has no Documents or Library folder for %@." = "이 Apps Manager 백업에는 %@의 Documents 또는 Library 폴더가 없습니다.";
+"\n\nThe Apps Manager backup also holds App Group data (%@). It isn't imported: a backup holds the app's own data folder only." = "\n\nApps Manager 백업에는 App Group 데이터(%@)도 있습니다. 백업에는 앱 자체의 데이터 폴더만 포함되므로 가져오지 않습니다.";
+"\n\nIts keychain items are encrypted by Apps Manager and can't be imported." = "\n\n키체인 항목은 Apps Manager가 암호화했으므로 가져올 수 없습니다.";

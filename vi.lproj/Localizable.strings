@@ -1143,3 +1143,6 @@
 "Not changed: %@ belongs to the same SQLite database and another app is using it. Its files are only changed together. Quit that app and try again." = "Không thay đổi: %@ thuộc cùng cơ sở dữ liệu SQLite và một ứng dụng khác đang dùng nó. Các tệp của cơ sở dữ liệu chỉ được thay đổi cùng nhau. Hãy thoát ứng dụng đó và thử lại.";
 "Not changed: %@ of the same SQLite database failed, and its files are only changed together." = "Không thay đổi: %@ của cùng cơ sở dữ liệu SQLite đã thất bại, và các tệp của cơ sở dữ liệu chỉ được thay đổi cùng nhau.";
 "%lu of %lu files were imported.\n\n%@" = "Đã nhập %lu trên %lu tệp.\n\n%@";
+"This Apps Manager backup has no Documents or Library folder for %@." = "Bản sao lưu Apps Manager này không có thư mục Documents hoặc Library cho %@.";
+"\n\nThe Apps Manager backup also holds App Group data (%@). It isn't imported: a backup holds the app's own data folder only." = "\n\nBản sao lưu Apps Manager còn chứa dữ liệu App Group (%@). Dữ liệu này không được nhập: một bản sao lưu chỉ gồm thư mục dữ liệu riêng của ứng dụng.";
+"\n\nIts keychain items are encrypted by Apps Manager and can't be imported." = "\n\nCác mục chuỗi khóa của nó được Apps Manager mã hóa và không thể nhập.";

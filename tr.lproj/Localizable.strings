@@ -1143,3 +1143,6 @@
 "Not changed: %@ belongs to the same SQLite database and another app is using it. Its files are only changed together. Quit that app and try again." = "Değiştirilmedi: %@ aynı SQLite veritabanına ait ve başka bir uygulama onu kullanıyor. Veritabanının dosyaları yalnızca birlikte değiştirilir. O uygulamadan çıkıp yeniden deneyin.";
 "Not changed: %@ of the same SQLite database failed, and its files are only changed together." = "Değiştirilmedi: aynı SQLite veritabanındaki %@ başarısız oldu ve veritabanının dosyaları yalnızca birlikte değiştirilir.";
 "%lu of %lu files were imported.\n\n%@" = "%lu / %lu dosya içe aktarıldı.\n\n%@";
+"This Apps Manager backup has no Documents or Library folder for %@." = "Bu Apps Manager yedeğinde %@ için Documents veya Library klasörü yok.";
+"\n\nThe Apps Manager backup also holds App Group data (%@). It isn't imported: a backup holds the app's own data folder only." = "\n\nApps Manager yedeği App Group verileri de içeriyor (%@). Bunlar içe aktarılmaz: bir yedek yalnızca uygulamanın kendi veri klasörünü içerir.";
+"\n\nIts keychain items are encrypted by Apps Manager and can't be imported." = "\n\nAnahtar zinciri öğeleri Apps Manager tarafından şifrelenmiştir ve içe aktarılamaz.";

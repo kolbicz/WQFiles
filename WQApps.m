@@ -1234,13 +1234,18 @@ static void WQAppScanWatch(WQScanCancellation *cancellation, NSUInteger lastSeri
 }
 
 // Import as Backup: a folder or ZIP with Documents and/or Library (from the
-// Files app, another device's shared backup or another tool) becomes a
-// normal, verified backup of this app, ready to restore.
+// Files app, another device's shared backup or another tool, such as an Apps
+// Manager .adbk) becomes a normal, verified backup of this app, ready to restore.
 - (void)pickImportFor:(WQAppItem *)app
 {
     _importApp = app;
+    NSMutableArray<UTType *> *types = [NSMutableArray arrayWithObjects:UTTypeFolder, UTTypeZIP, nil];
+    // Info.plist imports .adbk as a ZIP; this also covers a device where
+    // another app declares the extension differently.
+    UTType *adbk = [UTType typeWithFilenameExtension:@"adbk"];
+    if (adbk && ![types containsObject:adbk]) [types addObject:adbk];
     UIDocumentPickerViewController *picker = [[UIDocumentPickerViewController alloc]
-        initForOpeningContentTypes:@[UTTypeFolder, UTTypeZIP] asCopy:NO];
+        initForOpeningContentTypes:types asCopy:NO];
     picker.delegate = self;
     picker.allowsMultipleSelection = NO;
     [self presentViewController:picker animated:YES completion:nil];
@@ -1268,7 +1273,8 @@ static void WQAppScanWatch(WQScanCancellation *cancellation, NSUInteger lastSeri
         BOOL scoped = [url startAccessingSecurityScopedResource];
         __block NSString *error = nil, *dest = nil;
         __block NSArray<NSString *> *declared = @[];
-        __block NSArray *ignored = @[];
+        __block NSArray *ignored = @[], *adbkGroups = @[];
+        __block BOOL adbkKeychain = NO;
         NSString *work = [NSTemporaryDirectory() stringByAppendingPathComponent:
                           [@"wq-import-" stringByAppendingString:NSUUID.UUID.UUIDString]];
         NSFileManager *fm = NSFileManager.defaultManager;
@@ -1299,7 +1305,7 @@ static void WQAppScanWatch(WQScanCancellation *cancellation, NSUInteger lastSeri
             // Every identity declaration counts: a manifest naming this app
             // must not hide container metadata naming another one.
             NSString *invalid = nil;
-            declared = WQAppsSupportImportDeclaredBundles(root, &invalid);
+            declared = WQAppsSupportImportDeclaredBundlesIn(source, root, &invalid);
             if (invalid) {
                 error = WQLocalizedFormat(@"The data names an invalid app identifier (%@).", invalid);
                 return;
@@ -1307,6 +1313,11 @@ static void WQAppScanWatch(WQScanCancellation *cancellation, NSUInteger lastSeri
             BOOL foreign = declared.count > 1 || (declared.count == 1 && ![declared.firstObject isEqualToString:bundleID]);
             if (foreign && ![[NSSet setWithArray:confirmed ?: @[]] isEqualToSet:[NSSet setWithArray:declared]]) return;   // ask first
             ignored = WQAppsSupportImportIgnored(root);
+            NSString *adbkDir = WQAppsSupportADBKDir(source, root);
+            if (adbkDir) {
+                adbkGroups = WQAppsSupportADBKGroups(adbkDir);
+                adbkKeychain = WQAppsSupportADBKHasKeychain(adbkDir);
+            }
             NSDictionary *extra = foreign ? @{ @"ImportDeclaredBundleIDs": declared } : nil;
             dest = wq_make_backup_from(bundleID, root, kBackupReasonImported, extra, nil, &error);
         }];
@@ -1317,6 +1328,9 @@ static void WQAppScanWatch(WQScanCancellation *cancellation, NSUInteger lastSeri
                declared.count ? [declared componentsJoinedByString:@", "] : @"nothing",
                dest ? dest.lastPathComponent : (error ?: @"needs confirmation"),
                ignored.count ? [NSString stringWithFormat:@" (left out: %@)", [ignored componentsJoinedByString:@", "]] : @"");
+        if (adbkGroups.count || adbkKeychain)
+            wq_log(@"import backup %@: Apps Manager backup; App Groups not imported: %@; keychain items: %@", bundleID,
+                   adbkGroups.count ? [adbkGroups componentsJoinedByString:@", "] : @"none", adbkKeychain ? @"not imported" : @"none");
         dispatch_async(dispatch_get_main_queue(), ^{
             [self setBusy:NO status:nil];
             if (!dest && !error && declared.count) {
@@ -1338,10 +1352,17 @@ static void WQAppScanWatch(WQScanCancellation *cancellation, NSUInteger lastSeri
                 wq_alert(self, @"Not imported", WQLocalizedFormat(@"%@ Nothing was changed.", error ?: WQLocalized(@"The import failed.")));
                 return;
             }
+            NSMutableString *notes = [NSMutableString new];
+            if (ignored.count)
+                [notes appendString:WQLocalizedFormat(@"\n\nLeft out (only Documents and Library are backed up): %@.",
+                                                      [ignored componentsJoinedByString:@", "])];
+            if (adbkGroups.count)
+                [notes appendString:WQLocalizedFormat(@"\n\nThe Apps Manager backup also holds App Group data (%@). It isn't imported: a backup holds the app's own data folder only.",
+                                                      [adbkGroups componentsJoinedByString:@", "])];
+            if (adbkKeychain)
+                [notes appendString:WQLocalized(@"\n\nIts keychain items are encrypted by Apps Manager and can't be imported.")];
             NSString *message = WQLocalizedFormat(@"Saved as backup %@ of %@. It's verified like any other backup and can be restored from Apps.%@",
-                dest.lastPathComponent, app.name,
-                ignored.count ? WQLocalizedFormat(@"\n\nLeft out (only Documents and Library are backed up): %@.",
-                                                  [ignored componentsJoinedByString:@", "]) : @"");
+                dest.lastPathComponent, app.name, notes);
             UIAlertController *done = wq_alert_controller(@"Imported", message, UIAlertControllerStyleAlert);
             [done addAction:wq_alert_action(@"Done", UIAlertActionStyleCancel, ^(UIAlertAction *__unused a) {
                 [self scan];

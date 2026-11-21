@@ -1143,3 +1143,6 @@
 "Not changed: %@ belongs to the same SQLite database and another app is using it. Its files are only changed together. Quit that app and try again." = "Não alterado: %@ pertence ao mesmo banco de dados SQLite e outro app o está usando. Seus arquivos só são alterados juntos. Feche esse app e tente novamente.";
 "Not changed: %@ of the same SQLite database failed, and its files are only changed together." = "Não alterado: %@ do mesmo banco de dados SQLite falhou, e seus arquivos só são alterados juntos.";
 "%lu of %lu files were imported.\n\n%@" = "%lu de %lu arquivos foram importados.\n\n%@";
+"This Apps Manager backup has no Documents or Library folder for %@." = "Este backup do Apps Manager não tem uma pasta Documents ou Library para %@.";
+"\n\nThe Apps Manager backup also holds App Group data (%@). It isn't imported: a backup holds the app's own data folder only." = "\n\nO backup do Apps Manager também contém dados de App Group (%@). Eles não são importados: um backup contém só a pasta de dados do próprio app.";
+"\n\nIts keychain items are encrypted by Apps Manager and can't be imported." = "\n\nSeus itens das chaves estão criptografados pelo Apps Manager e não podem ser importados.";

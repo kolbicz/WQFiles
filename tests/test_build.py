@@ -106,6 +106,17 @@ exec /usr/bin/unzip "$@"
 '''
 
 
+class DeclaredTypeTests(unittest.TestCase):
+    def test_apps_manager_backups_are_imported_as_zip(self):
+        # Import as Backup's picker offers ZIPs; an .adbk is one (issue #19).
+        with (ROOT / "Info.plist").open("rb") as plist_file:
+            info = plistlib.load(plist_file)
+        adbk = [t for t in info.get("UTImportedTypeDeclarations", [])
+                if "adbk" in t.get("UTTypeTagSpecification", {}).get("public.filename-extension", [])]
+        self.assertEqual(len(adbk), 1)
+        self.assertIn("public.zip-archive", adbk[0]["UTTypeConformsTo"])
+
+
 class StagedBuildTests(unittest.TestCase):
     def _fake_environment(self, directory: Path):
         fake_bin = directory / "bin"

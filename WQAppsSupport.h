@@ -390,12 +390,84 @@ static inline BOOL WQAppsSupportJournalAllowsNewRestore(WQAppsSupportJournalStat
 
 #pragma mark - Import as Backup
 
+// Apps Manager backups (.adbk, a ZIP; issue #19): Binfo.plist (id,
+// displayName, date) next to the app's data folder, which is named after the
+// bundle ID, plus ___groups___ (its App Group folders), __private_info
+// (keychain items, encrypted by Apps Manager) and __pasteboards__.
+static NSString *const kWQADBKInfo = @"Binfo.plist";
+static NSString *const kWQADBKGroups = @"___groups___";
+static NSString *const kWQADBKKeychain = @"__private_info";
+
+static inline BOOL WQAppsSupportIsRegularFile(NSString *path)
+{
+    struct stat st;
+    return lstat(path.fileSystemRepresentation, &st) == 0 && S_ISREG(st.st_mode);
+}
+
+static inline BOOL WQAppsSupportIsDirectory(NSString *path)
+{
+    struct stat st;
+    return lstat(path.fileSystemRepresentation, &st) == 0 && S_ISDIR(st.st_mode);
+}
+
+// The `id` in dir's Binfo.plist: a bundle ID, the invalid value as text in
+// *invalid, or nil when dir holds no Apps Manager backup.
+static inline NSString *WQAppsSupportADBKBundle(NSString *dir, NSString **invalid)
+{
+    if (invalid) *invalid = nil;
+    NSString *info = [dir stringByAppendingPathComponent:kWQADBKInfo];
+    if (!WQAppsSupportIsRegularFile(info)) return nil;
+    NSDictionary *plist = [NSDictionary dictionaryWithContentsOfFile:info];
+    id value = [plist isKindOfClass:NSDictionary.class] ? plist[@"id"] : nil;
+    if (!value) return nil;
+    if (WQAppsSupportBundleIDValid(value)) return value;
+    if (invalid) *invalid = [value isKindOfClass:NSString.class] ? value : [value description];
+    return nil;
+}
+
+// The folder holding the Apps Manager backup that `root` came from (root's
+// parent, inside the picked `top`), or nil for any other import.
+static inline NSString *WQAppsSupportADBKDir(NSString *top, NSString *root)
+{
+    if (![root hasPrefix:[top stringByAppendingString:@"/"]]) return nil;
+    NSString *parent = root.stringByDeletingLastPathComponent;
+    return WQAppsSupportIsRegularFile([parent stringByAppendingPathComponent:kWQADBKInfo]) ? parent : nil;
+}
+
+// The App Group folders an Apps Manager backup holds; an import leaves them
+// out (a WQ Files backup is the app's own data folder).
+static inline NSArray<NSString *> *WQAppsSupportADBKGroups(NSString *adbkDir)
+{
+    NSMutableArray *groups = [NSMutableArray new];
+    NSString *dir = [adbkDir stringByAppendingPathComponent:kWQADBKGroups];
+    for (NSString *name in [[NSFileManager.defaultManager contentsOfDirectoryAtPath:dir error:nil] sortedArrayUsingSelector:@selector(compare:)]) {
+        if (![name hasPrefix:@"."] && WQAppsSupportIsDirectory([dir stringByAppendingPathComponent:name])) [groups addObject:name];
+    }
+    return groups;
+}
+
+// Whether an Apps Manager backup holds keychain items (encrypted, so they
+// can't be imported).
+static inline BOOL WQAppsSupportADBKHasKeychain(NSString *adbkDir)
+{
+    return WQAppsSupportIsRegularFile([adbkDir stringByAppendingPathComponent:kWQADBKKeychain]);
+}
+
 // The folder inside an import that holds Documents and/or Library: the
 // picked folder itself, or the shallowest one below it (a shared backup ZIP
 // or another tool's export usually wraps them in a folder). Several at the
-// same depth are ambiguous.
+// same depth are ambiguous. In an Apps Manager backup it is the folder its
+// Binfo.plist names, never one of its App Group folders.
 static inline NSString *WQAppsSupportImportRoot(NSString *dir, NSString **error)
 {
+    NSString *adbkBundle = WQAppsSupportADBKBundle(dir, NULL);
+    if (adbkBundle) {
+        NSString *data = [dir stringByAppendingPathComponent:adbkBundle];
+        if (WQAppsSupportIsDirectory([data stringByAppendingPathComponent:@"Documents"]) ||
+            WQAppsSupportIsDirectory([data stringByAppendingPathComponent:@"Library"])) return data;
+        if (error) *error = [NSString stringWithFormat:NSLocalizedString(@"This Apps Manager backup has no Documents or Library folder for %@.", nil), adbkBundle];
+        return nil;
+    }
     NSFileManager *fm = NSFileManager.defaultManager;
     NSArray<NSString *> *level = @[dir];
     for (int depth = 0; depth <= 3 && level.count; depth++) {
@@ -452,6 +524,20 @@ static inline NSArray<NSString *> *WQAppsSupportImportDeclaredBundles(NSString *
         }
         if (![ids containsObject:value]) [ids addObject:value];
     }
+    return ids;
+}
+
+// As WQAppsSupportImportDeclaredBundles, plus the `id` of the Apps Manager
+// backup (Binfo.plist) that `root` came from inside the picked `top`.
+static inline NSArray<NSString *> *WQAppsSupportImportDeclaredBundlesIn(NSString *top, NSString *root, NSString **invalid)
+{
+    NSMutableArray<NSString *> *ids = [WQAppsSupportImportDeclaredBundles(root, invalid) mutableCopy];
+    NSString *adbkDir = WQAppsSupportADBKDir(top, root);
+    if (!adbkDir) return ids;
+    NSString *adbkInvalid = nil;
+    NSString *adbk = WQAppsSupportADBKBundle(adbkDir, &adbkInvalid);
+    if (adbkInvalid && invalid && !*invalid) *invalid = adbkInvalid;
+    if (adbk && ![ids containsObject:adbk]) [ids addObject:adbk];
     return ids;
 }
 

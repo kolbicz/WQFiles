@@ -1139,3 +1139,6 @@
 "Not changed: %@ belongs to the same SQLite database and another app is using it. Its files are only changed together. Quit that app and try again." = "変更されていません: %@ は同じ SQLite データベースのファイルで、別のアプリが使用中です。データベースのファイルはまとめてのみ変更されます。そのアプリを終了してからもう一度お試しください。";
 "Not changed: %@ of the same SQLite database failed, and its files are only changed together." = "変更されていません: 同じ SQLite データベースの %@ が失敗しました。データベースのファイルはまとめてのみ変更されます。";
 "%lu of %lu files were imported.\n\n%@" = "%lu / %lu 個のファイルを読み込みました。\n\n%@";
+"This Apps Manager backup has no Documents or Library folder for %@." = "この Apps Manager バックアップには %@ の Documents または Library フォルダがありません。";
+"\n\nThe Apps Manager backup also holds App Group data (%@). It isn't imported: a backup holds the app's own data folder only." = "\n\nApps Manager バックアップには App Group のデータ（%@）も含まれています。バックアップに含まれるのはアプリ自身のデータフォルダだけなので、読み込まれません。";
+"\n\nIts keychain items are encrypted by Apps Manager and can't be imported." = "\n\nキーチェーン項目は Apps Manager によって暗号化されているため、読み込めません。";

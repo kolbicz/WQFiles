@@ -83,7 +83,9 @@ new files.
   Mail and so on. **Import as Backup…** (tap an app) turns a folder or ZIP with
   `Documents`/`Library` (another device's shared backup, another tool's export)
   into a normal verified backup of that app, ready to restore; data that says
-  it belongs to a different app asks first. Show all apps, only Apple's, only others, only backed-up
+  it belongs to a different app asks first. Apps Manager backups (`.adbk`)
+  work too: the app's data folder is imported; its App Group data and its
+  keychain items (encrypted by Apps Manager) are not. Show all apps, only Apple's, only others, only backed-up
   ones, or only installed or offloaded ones (when nearly every app's state can be read); long-press to copy the bundle ID or container path.
   Apps and the Cache Cleaner keep their last results, including across app
   launches. Scanning is a task, not a page lifetime: switch tabs or leave the

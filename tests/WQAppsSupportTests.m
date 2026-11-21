@@ -244,6 +244,56 @@ static void TestImportRoot(void)
     [fm createSymbolicLinkAtPath:[base stringByAppendingPathComponent:@"none/Documents"] withDestinationPath:@"/tmp" error:nil];
     error = nil;
     WQCheck(WQAppsSupportImportRoot([base stringByAppendingPathComponent:@"none"], &error) == nil && error.length > 0);
+
+    // An Apps Manager backup (.adbk, unpacked; issue #19). Its App Group
+    // folder has a Library too and sits deeper, so it must never be chosen.
+    mk(@"adbk/com.example.app/Documents"); mk(@"adbk/com.example.app/Library/Preferences");
+    mk(@"adbk/com.example.app/tmp"); mk(@"adbk/com.example.app/StoreKit");
+    file(@"adbk/com.example.app/.com.apple.mobile_container_manager.metadata.plist", @{@"MCMMetadataIdentifier": @"com.example.app"});
+    mk(@"adbk/___groups___/group.com.example.app/Library");
+    mk(@"adbk/__pasteboards__");
+    file(@"adbk/Binfo.plist", (@{@"id": @"com.example.app", @"displayName": @"Example", @"date": NSDate.date}));
+    file(@"adbk/__private_info", nil);
+    file(@"adbk/com.example.app.plist", @{});
+    NSString *adbkTop = [base stringByAppendingPathComponent:@"adbk"];
+    NSString *adbkRoot = [adbkTop stringByAppendingPathComponent:@"com.example.app"];
+    error = nil;
+    WQCheck([WQAppsSupportImportRoot(adbkTop, &error) isEqualToString:adbkRoot]);
+    WQCheck([WQAppsSupportADBKBundle(adbkTop, &invalid) isEqualToString:@"com.example.app"] && !invalid);
+    WQCheck([WQAppsSupportImportDeclaredBundlesIn(adbkTop, adbkRoot, &invalid) isEqualToArray:(@[@"com.example.app"])] && !invalid);
+    WQCheck([WQAppsSupportADBKDir(adbkTop, adbkRoot) isEqualToString:adbkTop]);
+    WQCheck([WQAppsSupportADBKGroups(adbkTop) isEqualToArray:(@[@"group.com.example.app"])]);
+    WQCheck(WQAppsSupportADBKHasKeychain(adbkTop));
+    WQCheck([WQAppsSupportImportIgnored(adbkRoot) isEqualToArray:(@[@"StoreKit", @"tmp"])]);
+    // Binfo.plist naming another app than the container metadata: both count.
+    mk(@"adbk-other/com.example.app/Documents");
+    file(@"adbk-other/com.example.app/.com.apple.mobile_container_manager.metadata.plist", @{@"MCMMetadataIdentifier": @"com.example.app"});
+    file(@"adbk-other/Binfo.plist", @{@"id": @"com.example.other"});
+    mk(@"adbk-other/com.example.other/Library");
+    NSString *otherTop = [base stringByAppendingPathComponent:@"adbk-other"];
+    NSString *otherRoot = WQAppsSupportImportRoot(otherTop, &error);
+    WQCheck([otherRoot isEqualToString:[otherTop stringByAppendingPathComponent:@"com.example.other"]]);
+    WQCheck([WQAppsSupportImportDeclaredBundlesIn(otherTop, [otherTop stringByAppendingPathComponent:@"com.example.app"], &invalid)
+             isEqualToArray:(@[@"com.example.app", @"com.example.other"])] && !invalid);
+    // The named folder has no Documents/Library: refused, not the App Group's Library.
+    mk(@"adbk-empty/com.example.app/tmp");
+    mk(@"adbk-empty/___groups___/group.com.example.app/Library");
+    file(@"adbk-empty/Binfo.plist", @{@"id": @"com.example.app"});
+    error = nil;
+    WQCheck(WQAppsSupportImportRoot([base stringByAppendingPathComponent:@"adbk-empty"], &error) == nil &&
+            [error containsString:@"com.example.app"]);
+    // An invalid id is never used as a folder name and is reported.
+    mk(@"adbk-bad/data/Documents");
+    file(@"adbk-bad/Binfo.plist", @{@"id": @"../evil"});
+    NSString *badTop = [base stringByAppendingPathComponent:@"adbk-bad"];
+    NSString *badRoot = WQAppsSupportImportRoot(badTop, &error);
+    WQCheck([badRoot isEqualToString:[badTop stringByAppendingPathComponent:@"data"]]);
+    WQCheck(WQAppsSupportImportDeclaredBundlesIn(badTop, badRoot, &invalid).count == 0 && [invalid isEqualToString:@"../evil"]);
+    // Other imports: no Apps Manager data, same declarations as before.
+    WQCheck(WQAppsSupportADBKDir([base stringByAppendingPathComponent:@"deep"], deep) == nil);
+    WQCheck(WQAppsSupportADBKDir(direct, direct) == nil);
+    WQCheck([WQAppsSupportImportDeclaredBundlesIn([base stringByAppendingPathComponent:@"deep"], deep, &invalid)
+             isEqualToArray:(@[@"com.example.app"])] && !invalid);
     [fm removeItemAtPath:base error:nil];
 }
 

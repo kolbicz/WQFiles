@@ -1143,3 +1143,6 @@
 "Not changed: %@ belongs to the same SQLite database and another app is using it. Its files are only changed together. Quit that app and try again." = "未更改：%@ 属于同一个 SQLite 数据库，且另一个 App 正在使用它。数据库的文件只会一起更改。请退出该 App 后重试。";
 "Not changed: %@ of the same SQLite database failed, and its files are only changed together." = "未更改：同一个 SQLite 数据库中的 %@ 失败，数据库的文件只会一起更改。";
 "%lu of %lu files were imported.\n\n%@" = "已导入 %lu 个文件（共 %lu 个）。\n\n%@";
+"This Apps Manager backup has no Documents or Library folder for %@." = "此 Apps Manager 备份中没有 %@ 的 Documents 或 Library 文件夹。";
+"\n\nThe Apps Manager backup also holds App Group data (%@). It isn't imported: a backup holds the app's own data folder only." = "\n\n此 Apps Manager 备份还包含 App Group 数据（%@）。这些数据不会导入：备份只包含 App 自己的数据文件夹。";
+"\n\nIts keychain items are encrypted by Apps Manager and can't be imported." = "\n\n其中的钥匙串项目已被 Apps Manager 加密，无法导入。";
