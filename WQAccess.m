@@ -1363,8 +1363,9 @@ BOOL wq_create_file_from(NSString *path, NSString *source, NSString **errorText)
     }
     struct stat srcBefore = {0};
     if (fstat(in, &srcBefore) != 0) {
-        close(fd); close(in); close(parent);
-        unlinkat(parent, name, 0);
+        close(fd); close(in);
+        unlinkat(parent, name, 0);   // before the close: the number may be reused
+        close(parent);
         if (errorText) *errorText = WQLocalized(@"Cannot inspect the copy source");
         return NO;
     }

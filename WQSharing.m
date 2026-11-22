@@ -44,17 +44,28 @@ void wq_share_sweep_stale_exports(void)
         NSFileManager *fm = NSFileManager.defaultManager;
         NSString *tmp = NSTemporaryDirectory();
         NSDate *cutoff = [NSDate dateWithTimeIntervalSinceNow:-3600];
+        // Handed to other apps (share sheet): another app may still read a
+        // recent one, so these go after an hour.
+        NSArray<NSString *> *shared = @[@"WQShare-", @"WQTheme-", @"wq-sqlite-export"];
+        // Only this process used these, and this runs once at launch: whatever
+        // is left comes from a run that was killed. Some are full copies of
+        // other apps' databases or multi-GB ZIPs, so they go at once.
+        NSArray<NSString *> *own = @[@"wq-sqlite-", @"WQUpload-", @"WQWeb-", @"wq-import-", @"WQAppsRestore-", @"wq-zip-", @"wq-unzip-"];
         NSUInteger removed = 0;
         for (NSString *name in [fm contentsOfDirectoryAtPath:tmp error:nil]) {
-            if (![name hasPrefix:@"WQShare-"]) continue;
-            NSString *dir = [tmp stringByAppendingPathComponent:name];
-            NSDictionary *attrs = [fm attributesOfItemAtPath:dir error:nil];   // lstat: a link is never followed
-            if (![attrs.fileType isEqualToString:NSFileTypeDirectory]) continue;
+            BOOL aged = NO, known = NO;
+            for (NSString *prefix in shared) if ([name hasPrefix:prefix]) aged = known = YES;
+            for (NSString *prefix in own) if (!known && [name hasPrefix:prefix]) known = YES;
+            if (!known) continue;
+            NSString *item = [tmp stringByAppendingPathComponent:name];
+            NSDictionary *attrs = [fm attributesOfItemAtPath:item error:nil];   // lstat: a link is never followed
+            NSString *type = attrs.fileType;
+            if (![type isEqualToString:NSFileTypeDirectory] && ![type isEqualToString:NSFileTypeRegular]) continue;
             NSDate *modified = attrs.fileModificationDate;
-            if (modified && [modified compare:cutoff] == NSOrderedDescending) continue;   // may still be in use
-            if ([fm removeItemAtPath:dir error:nil]) removed++;
+            if (aged && modified && [modified compare:cutoff] == NSOrderedDescending) continue;   // may still be in use
+            if ([fm removeItemAtPath:item error:nil]) removed++;
         }
-        if (removed) wq_log(@"share: removed %lu stale export folder(s)", (unsigned long)removed);
+        if (removed) wq_log(@"temporary files: removed %lu stale item(s) left by earlier runs", (unsigned long)removed);
     });
 }
 

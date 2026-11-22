@@ -100,6 +100,14 @@ int main(void)
         NSDate *start = NSDate.date;
         check(!run(@"function inspect(){ for(;;){} }", json, NO, &error, NULL) && error.length, @"endless loop is stopped");
         check(-start.timeIntervalSinceNow < 10, @"... within the time limit");
+        // An exception whose toString throws again must not recurse in the handler.
+        check(!run(@"function inspect(){ var e = {toString(){ throw e; }}; throw e; }", json, NO, &error, NULL) && error.length,
+              @"an exception that throws from toString is reported, not fatal");
+        // Slow getters in the result: the run as a whole is bounded, not each read.
+        start = NSDate.date;
+        check(!run(@"function inspect(){ const rows=[]; for (let i=0;i<40;i++) rows.push({label:'x', get value(){ const t=Date.now(); while(Date.now()-t<400){} return 1; }});"
+                    " return {sections:[{rows}]} }", json, NO, &error, NULL) && error.length, @"slow result getters are stopped");
+        check(-start.timeIntervalSinceNow < 10, @"... within a bounded time");
 
         // Installing from a ZIP.
         NSFileManager *fm = NSFileManager.defaultManager;

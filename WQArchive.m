@@ -463,9 +463,9 @@ static BOOL wq_zip_read_directory(int fd, uint64_t fileSize, WQZipItem **itemsOu
         }
         it.name = wq_zip_decode_name(p + 46, nameLen, it.flags);
         if (!it.name) { ok = NO; break; }
+        // The assignment retains the name (a strong field under ARC);
+        // wq_zip_free_items lets go of it.
         items[n] = it;
-        // Keep the name alive inside the C array.
-        CFBridgingRetain(it.name);
         n++;
         pos += 46 + nameLen + extraLen + commentLen;
     }
@@ -474,7 +474,7 @@ static BOOL wq_zip_read_directory(int fd, uint64_t fileSize, WQZipItem **itemsOu
     if (ok && pos != cdSize) ok = NO;
     free(cd);
     if (!ok) {
-        for (NSUInteger i = 0; i < n; i++) CFBridgingRelease((__bridge CFTypeRef)items[i].name);
+        for (NSUInteger i = 0; i < n; i++) items[i].name = nil;
         free(items);
         *error = WQLocalized(@"The ZIP file is damaged (bad entry)");
         return NO;
@@ -486,7 +486,7 @@ static BOOL wq_zip_read_directory(int fd, uint64_t fileSize, WQZipItem **itemsOu
 
 static void wq_zip_free_items(WQZipItem *items, NSUInteger n)
 {
-    for (NSUInteger i = 0; i < n; i++) CFBridgingRelease((__bridge CFTypeRef)items[i].name);
+    for (NSUInteger i = 0; i < n; i++) items[i].name = nil;
     free(items);
 }
 

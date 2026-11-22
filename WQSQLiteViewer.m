@@ -1019,10 +1019,20 @@ static int wq_sqlite_edit_authorizer(void *__unused context, int action, const c
     [alert addAction:wq_alert_action(@"Cancel", UIAlertActionStyleCancel, nil)];
     [alert addAction:wq_alert_action(@"Edit", UIAlertActionStyleDefault, ^(UIAlertAction *__unused a) {
         WQSQLiteSnapshot *snapshot = self->_snapshot;
-        dispatch_sync(snapshot.queue, ^{ sqlite3_exec(snapshot.db, "PRAGMA query_only = OFF", NULL, NULL, NULL); });
-        snapshot.editing = YES;
-        [self updateButtons];
-        [self.tableView reloadData];
+        // Not dispatch_sync: the queue may be counting rows of a large
+        // database, and the main thread would wait for all of it. The
+        // counts are stopped (their statement too) and start again after.
+        [self->_counting cancel];
+        dispatch_async(snapshot.queue, ^{
+            sqlite3_exec(snapshot.db, "PRAGMA query_only = OFF", NULL, NULL, NULL);
+            dispatch_async(dispatch_get_main_queue(), ^{
+                if (snapshot != self->_snapshot) return;
+                snapshot.editing = YES;
+                [self updateButtons];
+                [self.tableView reloadData];
+                [self countRows];
+            });
+        });
     })];
     [self presentViewController:alert animated:YES completion:nil];
 }
@@ -1098,8 +1108,10 @@ static int wq_sqlite_edit_authorizer(void *__unused context, int action, const c
     _counting = counting;
     __weak typeof(self) weakSelf = self;
     dispatch_async(snapshot.queue, ^{
+        // Lets a cancel end a count(*) that is already running.
+        sqlite3_progress_handler(snapshot.db, 20000, wq_sqlite_cancel_query, (__bridge void *)counting);
         for (NSDictionary *table in tables) {
-            if (!weakSelf || counting.isCancelled) return;
+            if (!weakSelf || counting.isCancelled) break;
             if (![table[@"type"] isEqualToString:@"table"]) continue;
             NSString *sql = [@"SELECT count(*) FROM " stringByAppendingString:wq_sqlite_quote_identifier(table[@"name"])];
             sqlite3_stmt *stmt = NULL;
@@ -1116,6 +1128,7 @@ static int wq_sqlite_edit_authorizer(void *__unused context, int action, const c
                 [strongSelf.tableView reloadData];
             });
         }
+        sqlite3_progress_handler(snapshot.db, 0, NULL, NULL);
     });
 }
 

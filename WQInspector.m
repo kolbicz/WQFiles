@@ -252,7 +252,10 @@ static NSString *wq_inspector_value_text(JSValue *value)
     return json.isString ? json.toString : value.toString;
 }
 
-static NSString *wq_inspector_check(JSValue *result, WQInspectorResult *out)
+// Reading the result runs script code again (getters, toJSON), and each
+// entry into JavaScript gets the full time limit. `deadline` bounds the run
+// as a whole; *timedOut says the result was abandoned for it.
+static NSString *wq_inspector_check(JSValue *result, WQInspectorResult *out, CFAbsoluteTime deadline, BOOL *timedOut)
 {
     if (!result.isObject || result.isArray) return WQLocalized(@"inspect() must return an object with \"sections\".");
     JSValue *title = result[@"title"];
@@ -267,6 +270,7 @@ static NSString *wq_inspector_check(JSValue *result, WQInspectorResult *out)
     if (count > WQInspectorMaxSections) { count = WQInspectorMaxSections; capped = YES; }
     NSMutableArray<WQInspectorSection *> *list = [NSMutableArray new];
     for (NSUInteger i = 0; i < count; i++) {
+        if (CFAbsoluteTimeGetCurrent() > deadline) { *timedOut = YES; return @""; }
         JSValue *s = [sections valueAtIndex:i];
         if (!s.isObject || s.isArray) return WQLocalizedFormat(@"Section %lu is not an object.", (unsigned long)i + 1);
         WQInspectorSection *section = [WQInspectorSection new];
@@ -285,6 +289,7 @@ static NSString *wq_inspector_check(JSValue *result, WQInspectorResult *out)
             NSUInteger n = [rows[@"length"] toUInt32];
             for (NSUInteger j = 0; j < n; j++) {
                 if (rowsTotal >= WQInspectorMaxRows) { capped = YES; break; }
+                if (CFAbsoluteTimeGetCurrent() > deadline) { *timedOut = YES; return @""; }
                 JSValue *r = [rows valueAtIndex:j];
                 if (!r.isObject || r.isArray)
                     return WQLocalizedFormat(@"Row %lu of section %lu is not an object.", (unsigned long)j + 1, (unsigned long)i + 1);
@@ -394,8 +399,13 @@ WQInspectorResult *wq_inspector_run(WQInspector *inspector, NSData *bytes, BOOL 
     __block NSString *exceptionText = nil;
     context.exceptionHandler = ^(JSContext *__unused c, JSValue *exception) {
         if (exceptionText) return;
+        // Set before reading the exception: its toString or "line" can throw
+        // again and re-enter this handler, without end.
+        exceptionText = @"exception";
         JSValue *line = exception[@"line"];
-        exceptionText = line.isNumber ? [NSString stringWithFormat:@"%@ (line %@)", exception.toString, line.toString] : exception.toString;
+        NSString *text = exception.toString;
+        if (text.length)
+            exceptionText = line.isNumber ? [NSString stringWithFormat:@"%@ (line %@)", text, line.toString] : text;
     };
     NSMutableArray<NSString *> *log = [NSMutableArray new];
     context[@"console"] = @{};
@@ -423,6 +433,7 @@ WQInspectorResult *wq_inspector_run(WQInspector *inspector, NSData *bytes, BOOL 
     input[@"plist"] = wq_inspector_plist(bytes, truncated) ?: (id)NSNull.null;
     JSValue *dataValue = [JSValue valueWithObject:data inContext:context];
 
+    CFAbsoluteTime started = CFAbsoluteTimeGetCurrent();
     [context evaluateScript:script withSourceURL:[NSURL fileURLWithPath:inspector.scriptPath]];
     JSValue *result = nil;
     if (!exceptionText) {
@@ -438,7 +449,13 @@ WQInspectorResult *wq_inspector_run(WQInspector *inspector, NSData *bytes, BOOL 
         return nil;
     }
     WQInspectorResult *out = [WQInspectorResult new];
-    NSString *problem = wq_inspector_check(result, out);
+    // The run as a whole gets twice the limit: loading the script, inspect(),
+    // and reading the result each start with a fresh limit of their own.
+    BOOL timedOut = NO;
+    exceptionText = nil;
+    NSString *problem = wq_inspector_check(result, out, started + 2 * timeLimit, &timedOut);
+    if (timedOut || [exceptionText containsString:@"terminated"])
+        problem = WQLocalizedFormat(@"The script took longer than %.0f seconds and was stopped.", timeLimit);
     if (problem) { if (error) *error = problem; return nil; }
     out.log = [log copy];
     return out;

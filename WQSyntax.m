@@ -12,9 +12,12 @@ const NSUInteger kWQSyntaxMaxLength = 1024 * 1024;
 // that matched gives the token kind. Earlier rules win where two could start
 // at one place.
 
-static NSString *const kDQ = @"\"(?:[^\"\\\\\\n]|\\\\.)*\"";   // "…" on one line, with escapes
-static NSString *const kSQ = @"'(?:[^'\\\\\\n]|\\\\.)*'";
-static NSString *const kBQ = @"`(?:[^`\\\\]|\\\\.)*`";
+// Atomic groups (a possessive *+ is not enough inside an alternation): a
+// long literal (an embedded base64 blob) otherwise
+// overflows the matcher's backtracking stack, and highlighting ends there.
+static NSString *const kDQ = @"\"(?>[^\"\\\\\\n]*)(?>(?:\\\\.(?>[^\"\\\\\\n]*))*)\"";   // "…" on one line, with escapes
+static NSString *const kSQ = @"'(?>[^'\\\\\\n]*)(?>(?:\\\\.(?>[^'\\\\\\n]*))*)'";
+static NSString *const kBQ = @"`(?>[^`\\\\]*)(?>(?:\\\\.(?>[^`\\\\]*))*)`";
 static NSString *const kNumber = @"\\b(?:0[xX][0-9a-fA-F_]+|0[bB][01_]+|\\d[\\d_]*(?:\\.\\d+)?(?:[eE][+-]?\\d+)?)[uUlLfF]*\\b";
 static NSString *const kSlashComments = @"//[^\\n]*|/\\*[\\s\\S]*?(?:\\*/|$(?![\\s\\S]))";
 static NSString *const kHashComment = @"#[^\\n]*";
@@ -103,10 +106,12 @@ static NSArray *wq_language_rules(NSString *language, NSRegularExpressionOptions
             @[@(WQSyntaxComment), @"/\\*[\\s\\S]*?(?:\\*/|$(?![\\s\\S]))"],
             @[@(WQSyntaxString), [NSString stringWithFormat:@"%@|%@", kDQ, kSQ]],
             @[@(WQSyntaxPreprocessor), @"@[\\w-]+"],
-            @[@(WQSyntaxKey), @"(?<![\\w-])-{0,2}[A-Za-z][\\w-]*(?=\\s*:(?![:\\w]*\\s*\\{))"],
+            // Possessive names and a bounded look-ahead for "{": an unquoted
+            // url(data:…) made every name rescan the rest of the blob.
+            @[@(WQSyntaxKey), @"(?<![\\w-])-{0,2}[A-Za-z][\\w-]*+(?=\\s*:(?![:\\w]{0,200}\\s*\\{))"],
             @[@(WQSyntaxNumber), @"#[0-9a-fA-F]{3,8}\\b|-?\\b\\d+(?:\\.\\d+)?(?:px|em|rem|%|vh|vw|s|ms|pt|deg)?"],
             @[@(WQSyntaxKeyword), @"!important\\b"],
-            @[@(WQSyntaxTag), @"[.#]?[A-Za-z_][\\w-]*(?=[^{};]*\\{)"],
+            @[@(WQSyntaxTag), @"(?<!\\w)[.#]?[A-Za-z_][\\w-]*+(?=[^{};]{0,400}\\{)"],
         ];
     }
     if ([language isEqualToString:@"sql"]) {

@@ -3513,8 +3513,9 @@ static NSString *wq_sqlite_set_key(NSString *path)
     UIAlertController *alert = wq_alert_controller(@"New Folder", _path, UIAlertControllerStyleAlert);
     [alert addTextFieldWithConfigurationHandler:^(UITextField *f) { f.placeholder = WQLocalizedNullable(@"Name"); }];
     [alert addAction:wq_alert_action(@"Cancel", UIAlertActionStyleCancel, nil)];
+    __weak UIAlertController *weakAlert = alert;   // the action belongs to the alert
     [alert addAction:wq_alert_action(@"Create", UIAlertActionStyleDefault, ^(UIAlertAction *__unused a) {
-        NSString *name = alert.textFields.firstObject.text;
+        NSString *name = weakAlert.textFields.firstObject.text;
         if (name.length == 0 || [name containsString:@"/"]) return;
         NSString *path = [self->_path stringByAppendingPathComponent:name];
         [self runIO:^BOOL(NSString **error) { return wq_create_dir(path, error); } failure:WQLocalizedNullable(@"Cannot create folder")];
@@ -3538,8 +3539,9 @@ static NSString *wq_sqlite_set_key(NSString *path)
     UIAlertController *alert = wq_alert_controller(@"Rename", item.path, UIAlertControllerStyleAlert);
     [alert addTextFieldWithConfigurationHandler:^(UITextField *f) { f.text = item.name; }];
     [alert addAction:wq_alert_action(@"Cancel", UIAlertActionStyleCancel, nil)];
+    __weak UIAlertController *weakAlert = alert;   // the action belongs to the alert
     [alert addAction:wq_alert_action(@"Rename", UIAlertActionStyleDefault, ^(UIAlertAction *__unused a) {
-        NSString *name = alert.textFields.firstObject.text;
+        NSString *name = weakAlert.textFields.firstObject.text;
         [self runIO:^BOOL(NSString **error) { return wq_rename_expecting(item.path, name, item.identity, error); } failure:WQLocalizedNullable(@"Cannot rename")];
     })];
     [self presentViewController:alert animated:YES completion:nil];
@@ -6396,6 +6398,8 @@ static NSString *const kWQTroubleshootingFooter =
                    : indexPath.row == 5 ? wq_prism_enabled()
                    : indexPath.row == 6 ? wq_show_folder_sizes()
                    : wq_deleting_allowed();
+        // The switch lives in a cell this controller owns: no strong self.
+        __weak typeof(self) weakSelf = self;
         [toggle addAction:[UIAction actionWithHandler:^(UIAction *action) {
             BOOL on = ((UISwitch *)action.sender).isOn;
             if (indexPath.row == 1) [defaults setBool:on forKey:kWQShowItemCountsPref];
@@ -6408,7 +6412,7 @@ static NSString *const kWQTroubleshootingFooter =
             else if (indexPath.row == 5) {
                 // Settings is a sheet over the tabs: close it, then swap the screens.
                 wq_set_prism_enabled(on);
-                [self dismissViewControllerAnimated:YES completion:^{ wq_apply_design(); }];
+                [weakSelf dismissViewControllerAnimated:YES completion:^{ wq_apply_design(); }];
             }
             else wq_set_deleting_allowed(on);
         }] forControlEvents:UIControlEventValueChanged];
@@ -7530,16 +7534,17 @@ static NSString *wq_count_text(int64_t n)
                                                     weight:UIFontWeightRegular];
     _status.textAlignment = NSTextAlignmentCenter;
     _status.text = WQLocalizedNullable(@"Starting…");
+    __weak typeof(self) weakSelf = self;   // the buttons are in this controller's view
     UIButton *hide = [UIButton buttonWithConfiguration:UIButtonConfiguration.borderedButtonConfiguration primaryAction:
         [UIAction actionWithTitle:WQLocalizedNullable(@"Hide") image:nil identifier:nil handler:^(UIAction *__unused a) {
-            [self dismissViewControllerAnimated:YES completion:nil];
+            [weakSelf dismissViewControllerAnimated:YES completion:nil];
         }]];
     UIButtonConfiguration *stopConfig = UIButtonConfiguration.borderedButtonConfiguration;
     stopConfig.baseForegroundColor = UIColor.systemRedColor;
     UIButton *stop = [UIButton buttonWithConfiguration:stopConfig primaryAction:
         [UIAction actionWithTitle:WQLocalizedNullable(@"Stop Scan") image:nil identifier:nil handler:^(UIAction *__unused a) {
             wq_full_scan_stop();
-            [self dismissViewControllerAnimated:YES completion:nil];
+            [weakSelf dismissViewControllerAnimated:YES completion:nil];
         }]];
     UIStackView *buttons = [[UIStackView alloc] initWithArrangedSubviews:@[hide, stop]];
     buttons.spacing = 12;
@@ -7597,11 +7602,29 @@ static BOOL wq_confirm_full_scan(NSString *what, int64_t ids, double seconds)
         if (!top) { dispatch_semaphore_signal(answered); return; }   // not in front: don't scan unasked
         NSString *message = WQLocalizedFormat(@"To list %@, WQ Files has to check every file on this device once: %@ files, %@.\n\nThis is only needed the first time; later scans only check new files and take seconds.\n\nKeep WQ Files open while it scans.", what, wq_count_text(ids), wq_duration_text(seconds));
         UIAlertController *alert = wq_alert_controller(@"Scan all files?", message, UIAlertControllerStyleAlert);
-        [alert addAction:wq_alert_action(@"Not Now", UIAlertActionStyleCancel, ^(UIAlertAction *__unused a) {
+        // The scan thread waits for exactly one answer. The alert can also go
+        // away with no action (it was shown over a progress alert that got
+        // dismissed, or never came up): that counts as Not Now, or the scan
+        // queue would wait until WQ Files is restarted.
+        __block BOOL done = NO;   // main thread only
+        void (^answer)(BOOL) = ^(BOOL yes) {
+            if (done) return;
+            done = YES;
+            start = yes;
             dispatch_semaphore_signal(answered);
+        };
+        __block NSUInteger gone = 0;
+        [NSTimer scheduledTimerWithTimeInterval:1.0 repeats:YES block:^(NSTimer *timer) {
+            if (done) { [timer invalidate]; return; }
+            gone = alert.presentingViewController || alert.isBeingPresented ? 0 : gone + 1;
+            // Twice in a row: an action's handler runs shortly after the alert has gone.
+            if (gone >= 2) { [timer invalidate]; wq_log(@"full scan: the question went away unanswered"); answer(NO); }
+        }];
+        [alert addAction:wq_alert_action(@"Not Now", UIAlertActionStyleCancel, ^(UIAlertAction *__unused a) {
+            answer(NO);
         })];
         [alert addAction:wq_alert_action(@"Start Scan", UIAlertActionStyleDefault, ^(UIAlertAction *__unused a) {
-            start = YES;
+            if (done) return;
             // A little extra time when the user switches away (iOS grants about 30 s).
             if (gScanBackgroundTask == UIBackgroundTaskInvalid) {
                 gScanBackgroundTask = [UIApplication.sharedApplication beginBackgroundTaskWithName:@"WQ full scan" expirationHandler:^{
@@ -7616,7 +7639,7 @@ static BOOL wq_confirm_full_scan(NSString *what, int64_t ids, double seconds)
                                                           UISheetPresentationControllerDetent.largeDetent];
             window.sheetPresentationController.prefersGrabberVisible = YES;
             gScanWindow = window;
-            dispatch_semaphore_signal(answered);
+            answer(YES);
             // After the alert has gone (presenting during its dismissal fails).
             dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.4 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
                 UIViewController *host = wq_top_view_controller();

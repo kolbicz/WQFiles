@@ -380,10 +380,11 @@ static void wqh_alert(UIViewController *host, NSString *title, NSString *message
         f.autocorrectionType = UITextAutocorrectionTypeNo;
     }];
     [a addAction:wq_alert_action(@"Cancel", UIAlertActionStyleCancel, nil)];
+    __weak UIAlertController *weakAlert = a;   // the action belongs to the alert
     [a addAction:wq_alert_action(@"Set", UIAlertActionStyleDefault, ^(UIAlertAction *__unused x) {
         // Bounded: oversized text is refused before it is scanned, and the
         // parse stops at the first byte past `count`.
-        NSData *bytes = WQParseHexExactly(a.textFields.firstObject.text ?: @"", count);
+        NSData *bytes = WQParseHexExactly(weakAlert.textFields.firstObject.text ?: @"", count);
         if (bytes.length != count) {
             wqh_alert(self, @"Not changed", WQVerbatim(WQLocalizedFormat(@"Enter exactly %lu bytes in hex.", (unsigned long)count)));
             return;
@@ -396,7 +397,9 @@ static void wqh_alert(UIViewController *host, NSString *title, NSString *message
         }
         [self->_editState noteChange];
         [self updateBar];
-        [self.tableView reloadRowsAtIndexPaths:@[indexPath] withRowAnimation:UITableViewRowAnimationNone];
+        // Not the row's index path: the columns (and so the rows) may have
+        // changed while the alert was open (rotation, Split View).
+        [self.tableView reloadData];
     })];
     [self presentViewController:a animated:YES completion:nil];
 }

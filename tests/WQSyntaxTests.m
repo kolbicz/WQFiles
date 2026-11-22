@@ -88,6 +88,20 @@ static void TestTokens(void)
     NSString *css = @"body .x { color: #fff; margin: 4px !important; }";
     CHECK(KindAt(css, @"css", @"color") == WQSyntaxKey);
     CHECK(KindAt(css, @"css", @"#fff") == WQSyntaxNumber);
+    CHECK(KindAt(css, @"css", @"body") == WQSyntaxTag);
+    CHECK(KindAt(css, @"css", @".x") == WQSyntaxTag);
+    // Long literals and blobs: linear time, and the text after them is still colored.
+    NSMutableString *blob = [NSMutableString new];
+    while (blob.length < 300000) [blob appendString:@"iVBORw0KGgo/AAAANSUhEUgAA+abcDEF0123456789"];
+    CFAbsoluteTime t0 = CFAbsoluteTimeGetCurrent();
+    NSString *bigCSS = [NSString stringWithFormat:@"a { background: url(data:image/png;base64,%@); }\nh1 { color: #fff; }", blob];
+    CHECK(KindAt(bigCSS, @"css", @"#fff") == WQSyntaxNumber);
+    CHECK(KindAt(bigCSS, @"css", @"h1") == WQSyntaxTag);
+    NSString *bigJSON = [NSString stringWithFormat:@"{\"blob\": \"%@\", \"n\": true}", blob];
+    CHECK(KindAt(bigJSON, @"json", @"true") == WQSyntaxKeyword);
+    NSString *bigC = [NSString stringWithFormat:@"char *s = \"%@\"; // tail", blob];
+    CHECK(KindAt(bigC, @"c", @"// tail") == WQSyntaxComment);
+    CHECK(CFAbsoluteTimeGetCurrent() - t0 < 5.0);
 
     NSString *yaml = @"name: app # c\nlist:\n  - enabled: true\n";
     CHECK(KindAt(yaml, @"yaml", @"name") == WQSyntaxKey);
