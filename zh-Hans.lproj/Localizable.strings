@@ -1151,3 +1151,6 @@
 "\n\nSymbolic links in the ZIP that were left out: %lu." = "\n\nZIP 中被略过的符号链接：%lu。";
 "\n\nThis data holds no %@ folder. Restoring it leaves the app's %@ as it is." = "\n\n此数据不含 %@ 文件夹。恢复它时，应用的 %@ 保持不变。";
 "The connection is not encrypted: others on the same network can read the password and the files. Share only on a network you trust." = "连接未加密：同一网络中的其他人可以读取密码和文件。请只在你信任的网络中共享。";
+"Allow Shortcuts to Change Files" = "允许快捷指令更改文件";
+"Shortcuts may not change files. Turn on Allow Shortcuts to Change Files in the settings of WQ Files." = "快捷指令不能更改文件。请在 WQ Files 的设置中打开“允许快捷指令更改文件”。";
+"Allow Shortcuts to Change Files: WQ Files adds actions to the Shortcuts app. Listing a folder and getting a file always work. When on, shortcuts and automations can also copy, move, rename, save and delete files, clean an app's caches and back up an app, without asking each time. Deleting and cleaning also need Allow Deleting." = "允许快捷指令更改文件：WQ Files 会向“快捷指令”App 添加操作。列出文件夹和获取文件始终可用。打开后，快捷指令和自动化还可以拷贝、移动、重命名、存储和删除文件，清理某个应用的缓存以及备份某个应用，且不会每次询问。删除和清理还需要打开“允许删除”。";

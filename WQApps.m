@@ -5,6 +5,7 @@
 //
 
 #import "WQApps.h"
+#import "WQShortcuts.h"
 #import "WQDir.h"
 #import "WQUI.h"
 #import "WQScanTask.h"
@@ -554,6 +555,93 @@ static NSString *wq_make_app_backup(NSString *bundleID, NSString *container, dev
     return wq_make_backup_from(bundleID, container, reason, nil, ^BOOL(NSString **validationError) {
         return wq_validate_container(container, bundleID, expectedDevice, expectedInode, validationError);
     }, error);
+}
+
+#pragma mark - Shortcuts
+
+// The data container of an app, from the LaunchServices database (no scan:
+// a shortcut may run with nobody there to answer the full-scan question).
+// The identity read here pins the folder for the action that follows.
+static NSString *wq_shortcut_app_container(NSString *bundleID, dev_t *device, ino_t *inode, NSString **error)
+{
+    if (!WQAppsSupportBundleIDValid(bundleID)) {
+        if (error) *error = WQLocalized(@"The app identifier is not a valid bundle identifier");
+        return nil;
+    }
+    if (!wq_display_names_loaded()) wq_load_display_names();
+    NSString *home = [NSHomeDirectory() stringByResolvingSymlinksInPath];
+    NSString *found = nil;
+    for (NSString *path in wq_ls_container_paths(nil)) {
+        if (![path hasPrefix:@"/private/var/mobile/Containers/Data/Application/"]) continue;
+        if (![wq_bundle_id_for_container(path) isEqualToString:bundleID]) continue;
+        if ([[path stringByResolvingSymlinksInPath] isEqualToString:home]) continue;   // never WQ Files itself
+        found = path;
+        break;
+    }
+    struct stat st;
+    if (!found || !wq_grant(found) || !wq_stat(found, &st) || !S_ISDIR(st.st_mode)) {
+        wq_log(@"shortcut: no data container for %@ (%@)", bundleID, found ?: @"not in the app database");
+        if (error) *error = WQLocalized(@"The app container no longer exists or is not a directory");
+        return nil;
+    }
+    *device = st.st_dev;
+    *inode = st.st_ino;
+    // The folder's own identifier has to agree with the database.
+    return wq_validate_container(found, bundleID, st.st_dev, st.st_ino, error) ? found : nil;
+}
+
+static WQShortcutResult *wq_shortcut_on_io(NSString *what, WQShortcutResult *(^work)(void))
+{
+    __block WQShortcutResult *result = nil;
+    dispatch_sync(wq_io(), ^{ @autoreleasepool { result = work(); } });
+    wq_log(@"shortcut: %@: %@", what, result.ok ? @"OK" : (result.message ?: @"failed"));
+    return result;
+}
+
+WQShortcutResult *wq_shortcut_clean_caches(NSString *bundleID)
+{
+    WQShortcutResult *refusal = wq_shortcut_refusal(YES);
+    if (refusal) return refusal;
+    return wq_shortcut_on_io([@"clean caches of " stringByAppendingString:bundleID ?: @"?"], ^WQShortcutResult *{
+        dev_t device = 0;
+        ino_t inode = 0;
+        NSString *error = nil;
+        NSString *container = wq_shortcut_app_container(bundleID, &device, &inode, &error);
+        if (!container) return wq_shortcut_failure(error);
+        unsigned long long freed = 0;
+        BOOL allRemoved = YES;
+        // What the Cache Cleaner clears for an app: Library/Caches and tmp.
+        for (NSString *relative in @[@"Library/Caches", @"tmp"]) {
+            // Again before each folder: the app may have been removed meanwhile.
+            if (!wq_validate_container(container, bundleID, device, inode, &error)) return wq_shortcut_failure(error);
+            if (!wq_purge_contents([container stringByAppendingPathComponent:relative], &freed)) allRemoved = NO;
+        }
+        WQShortcutResult *result = [WQShortcutResult new];
+        result.ok = YES;
+        result.path = container;
+        result.bytes = freed;
+        if (!allRemoved) wq_log(@"shortcut: some cache items of %@ could not be removed", bundleID);
+        return result;
+    });
+}
+
+WQShortcutResult *wq_shortcut_backup_app(NSString *bundleID)
+{
+    WQShortcutResult *refusal = wq_shortcut_refusal(NO);
+    if (refusal) return refusal;
+    return wq_shortcut_on_io([@"back up " stringByAppendingString:bundleID ?: @"?"], ^WQShortcutResult *{
+        dev_t device = 0;
+        ino_t inode = 0;
+        NSString *error = nil;
+        NSString *container = wq_shortcut_app_container(bundleID, &device, &inode, &error);
+        if (!container) return wq_shortcut_failure(error);
+        NSString *backup = wq_make_app_backup(bundleID, container, device, inode, nil, &error);
+        if (!backup) return wq_shortcut_failure(error);
+        WQShortcutResult *result = [WQShortcutResult new];
+        result.ok = YES;
+        result.path = backup;
+        return result;
+    });
 }
 
 static BOOL wq_dir_size_cancellable(NSString *dir, NSString *taskID, WQScanCancellation *cancellation,

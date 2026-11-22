@@ -81,12 +81,40 @@ trap cleanup EXIT
 APP="$OUT/Payload/WQFiles.app"
 mkdir -p "$APP"
 SDK=$(xcrun --sdk iphoneos --show-sdk-path)
+# Shortcuts actions: App Intents exist in Swift only, so the one Swift file is
+# compiled here and linked with the Objective-C sources. The compiler also
+# writes what the actions declare (titles, parameters) for the metadata step
+# further down.
+SWIFT_TARGET="arm64-apple-ios$MINIMUM_IOS_VERSION"
+SWIFT_OBJECT="$OUT/WQShortcutsIntents.o"
+cat > "$OUT/appintents-protocols.json" <<'JSON'
+["AppIntent","EntityQuery","AppEntity","TransientEntity","AppEnum","AppShortcutProviding","AppShortcutsProvider","AnyResolverProviding","AppIntentsPackage","DynamicOptionsProvider","_IntentValueRepresentable","_AssistantIntentsProvider","_GenerativeFunctionExtractable","IntentValueQuery","Resolver"]
+JSON
+xcrun --sdk iphoneos swiftc -target "$SWIFT_TARGET" -sdk "$SDK" -module-name WQFiles -parse-as-library -O \
+    -swift-version 5 -warnings-as-errors -module-cache-path "$OUT/ModuleCache" -import-objc-header WQShortcuts.h \
+    -emit-const-values-path "$OUT/WQShortcutsIntents.swiftconstvalues" \
+    -Xfrontend -const-gather-protocols-file -Xfrontend "$OUT/appintents-protocols.json" \
+    -c WQShortcuts.swift -o "$SWIFT_OBJECT"
+[[ -f "$SWIFT_OBJECT" && -f "$OUT/WQShortcutsIntents.swiftconstvalues" ]] || fail "swiftc wrote no Shortcuts object or constant values"
 xcrun --sdk iphoneos clang -fobjc-arc -fmodules -fmodules-cache-path="$OUT/ModuleCache" -arch arm64 \
     -miphoneos-version-min="$MINIMUM_IOS_VERSION" \
     -isysroot "$SDK" -Wall -Wextra -Werror -O2 ${WQ_EXTRA_CFLAGS:-} \
     -framework UIKit -framework Foundation -framework Security -framework UniformTypeIdentifiers -framework JavaScriptCore \
-    WQCore.m WQAccess.m WQScanTask.m WQLocalization.m WQLaunchServices.m WQUI.m WQSharing.m WQApps.m WQCache.m WQPlistEditor.m WQHexViewer.m WQSQLiteViewer.m WQSQLiteSave.m WQHealth.m WQTrash.m WQArchive.m WQSyntax.m WQMediaStream.m WQWebServer.m WQTheme.m WQInspector.m main.m -lsqlite3 -lz -o "$APP/WQFiles"
+    WQCore.m WQAccess.m WQScanTask.m WQLocalization.m WQLaunchServices.m WQUI.m WQSharing.m WQApps.m WQCache.m WQPlistEditor.m WQHexViewer.m WQSQLiteViewer.m WQSQLiteSave.m WQHealth.m WQTrash.m WQArchive.m WQSyntax.m WQMediaStream.m WQWebServer.m WQTheme.m WQInspector.m WQShortcuts.m main.m "$SWIFT_OBJECT" \
+    -L "$SDK/usr/lib/swift" -Xlinker -rpath -Xlinker /usr/lib/swift -lsqlite3 -lz -o "$APP/WQFiles"
 cp Info.plist "$APP/Info.plist"
+# What the Shortcuts app reads to list the actions: without this folder in the
+# app, the Swift code is there but no action shows up.
+SWIFT_TOOLCHAIN=$(dirname "$(dirname "$(dirname "$(xcrun --sdk iphoneos --find swiftc)")")")
+XCODE_BUILD=$(xcodebuild -version 2>/dev/null | awk '/Build version/ { print $3 }') || true
+printf '%s\n' "$ROOT/WQShortcuts.swift" > "$OUT/appintents-sources.txt"
+printf '%s\n' "$OUT/WQShortcutsIntents.swiftconstvalues" > "$OUT/appintents-constvalues.txt"
+xcrun appintentsmetadataprocessor --output "$APP" --toolchain-dir "$SWIFT_TOOLCHAIN" --module-name WQFiles \
+    --sdk-root "$SDK" --xcode-version "${XCODE_BUILD:-unknown}" --platform-family iOS \
+    --deployment-target "$MINIMUM_IOS_VERSION" --target-triple "$SWIFT_TARGET" \
+    --source-file-list "$OUT/appintents-sources.txt" --swift-const-vals-list "$OUT/appintents-constvalues.txt" \
+    --force >"$OUT/appintents.log" 2>&1 || { cat "$OUT/appintents.log" >&2; fail "the Shortcuts metadata could not be written"; }
+[[ -f "$APP/Metadata.appintents/extract.actionsdata" ]] || fail "the app has no Shortcuts metadata (Metadata.appintents)"
 # App icon with the iOS 18+ dark and tinted variants (issue #47): a catalog
 # built from icons/ and compiled by actool into Assets.car plus the classic
 # PNGs; its CFBundleIcons replace the plain PNG list in Info.plist.
@@ -134,6 +162,7 @@ validate_app() {
     local app_path=$1
     [[ -x "$app_path/WQFiles" ]] || fail "missing executable in $app_path"
     [[ -f "$app_path/Info.plist" ]] || fail "missing Info.plist in $app_path"
+    [[ -f "$app_path/Metadata.appintents/extract.actionsdata" ]] || fail "missing Shortcuts metadata in $app_path"
     [[ "$(plist_value CFBundleIdentifier "$app_path/Info.plist")" == "$EXPECTED_BUNDLE_ID" ]] || \
         fail "bundle identifier does not match source metadata"
     [[ "$(plist_value CFBundleShortVersionString "$app_path/Info.plist")" == "$EXPECTED_VERSION" ]] || \

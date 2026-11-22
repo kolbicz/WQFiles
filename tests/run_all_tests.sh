@@ -119,7 +119,7 @@ if [[ "${WQ_SKIP_IOS_CHECK:-0}" != 1 ]]; then
     printf '\n== Strict iOS arm64 syntax/link checks ==\n'
     IOS_SDK=$(xcrun --sdk iphoneos --show-sdk-path)
     MIN_OS=$(/usr/libexec/PlistBuddy -c 'Print :MinimumOSVersion' Info.plist)
-    SOURCES=(WQCore.m WQAccess.m WQScanTask.m WQLocalization.m WQLaunchServices.m WQUI.m WQSharing.m WQApps.m WQCache.m WQPlistEditor.m WQHexViewer.m WQSQLiteViewer.m WQSQLiteSave.m WQHealth.m WQTrash.m WQArchive.m WQSyntax.m WQMediaStream.m WQWebServer.m WQTheme.m WQInspector.m main.m)
+    SOURCES=(WQCore.m WQAccess.m WQScanTask.m WQLocalization.m WQLaunchServices.m WQUI.m WQSharing.m WQApps.m WQCache.m WQPlistEditor.m WQHexViewer.m WQSQLiteViewer.m WQSQLiteSave.m WQHealth.m WQTrash.m WQArchive.m WQSyntax.m WQMediaStream.m WQWebServer.m WQTheme.m WQInspector.m WQShortcuts.m main.m)
     FLAGS=(-fobjc-arc -fmodules "-fmodules-cache-path=$OUT/modules-ios" -arch arm64 "-miphoneos-version-min=$MIN_OS" -isysroot "$IOS_SDK" -Wall -Wextra -Werror -O2)
     xcrun --sdk iphoneos clang -fsyntax-only "${FLAGS[@]}" "${SOURCES[@]}" > "$OUT/ios-syntax.log" 2>&1 || {
         cat "$OUT/ios-syntax.log" >&2
@@ -128,6 +128,19 @@ if [[ "${WQ_SKIP_IOS_CHECK:-0}" != 1 ]]; then
     xcrun --sdk iphoneos clang "${FLAGS[@]}" -framework UIKit -framework Foundation -framework Security -framework UniformTypeIdentifiers -framework JavaScriptCore -lsqlite3 -lz \
         "${SOURCES[@]}" -o "$OUT/WQFiles-link-check" > "$OUT/ios-link.log" 2>&1 || {
         cat "$OUT/ios-link.log" >&2
+        exit 1
+    }
+    # The Shortcuts actions: the Swift file compiles against the same header
+    # the Objective-C side implements, and links with it.
+    xcrun --sdk iphoneos swiftc -target "arm64-apple-ios$MIN_OS" -sdk "$IOS_SDK" -module-name WQFiles -parse-as-library -O \
+        -swift-version 5 -warnings-as-errors -module-cache-path "$OUT/modules-swift" -import-objc-header WQShortcuts.h \
+        -c WQShortcuts.swift -o "$OUT/WQShortcutsIntents.o" > "$OUT/ios-swift.log" 2>&1 || {
+        cat "$OUT/ios-swift.log" >&2
+        exit 1
+    }
+    xcrun --sdk iphoneos clang "${FLAGS[@]}" -framework UIKit -framework Foundation -framework Security -framework UniformTypeIdentifiers -framework JavaScriptCore -lsqlite3 -lz \
+        -L "$IOS_SDK/usr/lib/swift" "${SOURCES[@]}" "$OUT/WQShortcutsIntents.o" -o "$OUT/WQFiles-link-check-swift" > "$OUT/ios-link-swift.log" 2>&1 || {
+        cat "$OUT/ios-link-swift.log" >&2
         exit 1
     }
     printf 'iOS syntax and link checks: PASS\n'

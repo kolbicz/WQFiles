@@ -32,6 +32,38 @@ if [ "$1" = "--sdk" ] && [ "$3" = "clang" ]; then
     chmod +x "$output"
     exit 0
 fi
+if [ "$1" = "--sdk" ] && [ "$3" = "--find" ]; then
+    printf '%s\n' "$FAKE_SDK/toolchain/usr/bin/$4"
+    exit 0
+fi
+if [ "$1" = "--sdk" ] && [ "$3" = "swiftc" ]; then
+    output=
+    constants=
+    previous=
+    for argument in "$@"; do
+        if [ "$previous" = "-o" ]; then output=$argument; fi
+        if [ "$previous" = "-emit-const-values-path" ]; then constants=$argument; fi
+        previous=$argument
+    done
+    test -n "$output" && test -n "$constants"
+    printf 'fixture object\n' > "$output"
+    printf '[]\n' > "$constants"
+    exit 0
+fi
+if [ "$1" = "appintentsmetadataprocessor" ]; then
+    output=
+    previous=
+    for argument in "$@"; do
+        if [ "$previous" = "--output" ]; then output=$argument; fi
+        previous=$argument
+    done
+    test -n "$output"
+    if [ "${FAKE_NO_INTENTS:-0}" != 1 ]; then
+        mkdir -p "$output/Metadata.appintents"
+        printf '{}\n' > "$output/Metadata.appintents/extract.actionsdata"
+    fi
+    exit 0
+fi
 if [ "$1" = "actool" ]; then
     compile=
     partial=
