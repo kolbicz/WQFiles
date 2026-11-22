@@ -1146,3 +1146,7 @@
 "This Apps Manager backup has no Documents or Library folder for %@." = "Bản sao lưu Apps Manager này không có thư mục Documents hoặc Library cho %@.";
 "\n\nThe Apps Manager backup also holds App Group data (%@). It isn't imported: a backup holds the app's own data folder only." = "\n\nBản sao lưu Apps Manager còn chứa dữ liệu App Group (%@). Dữ liệu này không được nhập: một bản sao lưu chỉ gồm thư mục dữ liệu riêng của ứng dụng.";
 "\n\nIts keychain items are encrypted by Apps Manager and can't be imported." = "\n\nCác mục chuỗi khóa của nó được Apps Manager mã hóa và không thể nhập.";
+"An interrupted restore of %@ was closed because the app was removed or reinstalled since. The data from before the restore is kept as backup %@." = "Một lần khôi phục bị gián đoạn của %@ đã được đóng vì ứng dụng đã bị gỡ hoặc cài lại từ đó. Dữ liệu trước khi khôi phục được giữ dưới dạng bản sao lưu %@.";
+"An interrupted restore of %@ could not be undone because its safety backup %@ no longer exists. The recovery was closed; check the app's data and restore a backup if needed." = "Không thể hoàn tác lần khôi phục bị gián đoạn của %@ vì bản sao lưu an toàn %@ không còn tồn tại. Quá trình phục hồi đã được đóng; hãy kiểm tra dữ liệu của ứng dụng và khôi phục một bản sao lưu nếu cần.";
+"\n\nSymbolic links in the ZIP that were left out: %lu." = "\n\nLiên kết tượng trưng trong ZIP đã bị bỏ qua: %lu.";
+"\n\nThis data holds no %@ folder. Restoring it leaves the app's %@ as it is." = "\n\nDữ liệu này không có thư mục %@. Khi khôi phục, %@ của ứng dụng được giữ nguyên.";

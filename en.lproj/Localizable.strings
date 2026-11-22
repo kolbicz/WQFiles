@@ -1146,3 +1146,7 @@
 "This Apps Manager backup has no Documents or Library folder for %@." = "This Apps Manager backup has no Documents or Library folder for %@.";
 "\n\nThe Apps Manager backup also holds App Group data (%@). It isn't imported: a backup holds the app's own data folder only." = "\n\nThe Apps Manager backup also holds App Group data (%@). It isn't imported: a backup holds the app's own data folder only.";
 "\n\nIts keychain items are encrypted by Apps Manager and can't be imported." = "\n\nIts keychain items are encrypted by Apps Manager and can't be imported.";
+"An interrupted restore of %@ was closed because the app was removed or reinstalled since. The data from before the restore is kept as backup %@." = "An interrupted restore of %@ was closed because the app was removed or reinstalled since. The data from before the restore is kept as backup %@.";
+"An interrupted restore of %@ could not be undone because its safety backup %@ no longer exists. The recovery was closed; check the app's data and restore a backup if needed." = "An interrupted restore of %@ could not be undone because its safety backup %@ no longer exists. The recovery was closed; check the app's data and restore a backup if needed.";
+"\n\nSymbolic links in the ZIP that were left out: %lu." = "\n\nSymbolic links in the ZIP that were left out: %lu.";
+"\n\nThis data holds no %@ folder. Restoring it leaves the app's %@ as it is." = "\n\nThis data holds no %@ folder. Restoring it leaves the app's %@ as it is.";

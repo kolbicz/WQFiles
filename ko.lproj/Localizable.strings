@@ -1146,3 +1146,7 @@
 "This Apps Manager backup has no Documents or Library folder for %@." = "이 Apps Manager 백업에는 %@의 Documents 또는 Library 폴더가 없습니다.";
 "\n\nThe Apps Manager backup also holds App Group data (%@). It isn't imported: a backup holds the app's own data folder only." = "\n\nApps Manager 백업에는 App Group 데이터(%@)도 있습니다. 백업에는 앱 자체의 데이터 폴더만 포함되므로 가져오지 않습니다.";
 "\n\nIts keychain items are encrypted by Apps Manager and can't be imported." = "\n\n키체인 항목은 Apps Manager가 암호화했으므로 가져올 수 없습니다.";
+"An interrupted restore of %@ was closed because the app was removed or reinstalled since. The data from before the restore is kept as backup %@." = "%@의 중단된 복원이 종료되었습니다. 그 사이 앱이 제거되었거나 다시 설치되었기 때문입니다. 복원 전 데이터는 백업 %@(으)로 보관되어 있습니다.";
+"An interrupted restore of %@ could not be undone because its safety backup %@ no longer exists. The recovery was closed; check the app's data and restore a backup if needed." = "%@의 중단된 복원을 되돌릴 수 없습니다. 안전 백업 %@이(가) 더 이상 없기 때문입니다. 복구가 종료되었습니다. 앱 데이터를 확인하고 필요하면 백업을 복원하세요.";
+"\n\nSymbolic links in the ZIP that were left out: %lu." = "\n\nZIP에서 제외된 심볼릭 링크: %lu개.";
+"\n\nThis data holds no %@ folder. Restoring it leaves the app's %@ as it is." = "\n\n이 데이터에는 %@ 폴더가 없습니다. 복원해도 앱의 %@은(는) 그대로 유지됩니다.";

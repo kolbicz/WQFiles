@@ -1142,3 +1142,7 @@
 "This Apps Manager backup has no Documents or Library folder for %@." = "لا تحتوي نسخة Apps Manager الاحتياطية هذه على مجلد Documents أو Library لـ %@.";
 "\n\nThe Apps Manager backup also holds App Group data (%@). It isn't imported: a backup holds the app's own data folder only." = "\n\nتحتوي نسخة Apps Manager الاحتياطية أيضاً على بيانات App Group (%@). لا تُستورد: النسخة الاحتياطية تضم مجلد بيانات التطبيق نفسه فقط.";
 "\n\nIts keychain items are encrypted by Apps Manager and can't be imported." = "\n\nعناصر سلسلة المفاتيح فيها مشفّرة بواسطة Apps Manager ولا يمكن استيرادها.";
+"An interrupted restore of %@ was closed because the app was removed or reinstalled since. The data from before the restore is kept as backup %@." = "تم إغلاق استعادة متوقفة لـ %@ لأن التطبيق أُزيل أو أُعيد تثبيته منذ ذلك الحين. البيانات السابقة للاستعادة محفوظة كنسخة احتياطية %@.";
+"An interrupted restore of %@ could not be undone because its safety backup %@ no longer exists. The recovery was closed; check the app's data and restore a backup if needed." = "تعذّر التراجع عن استعادة متوقفة لـ %@ لأن نسختها الاحتياطية الآمنة %@ لم تعد موجودة. تم إغلاق الاسترداد؛ تحقق من بيانات التطبيق واستعد نسخة احتياطية عند الحاجة.";
+"\n\nSymbolic links in the ZIP that were left out: %lu." = "\n\nالروابط الرمزية في ملف ZIP التي تم استبعادها: %lu.";
+"\n\nThis data holds no %@ folder. Restoring it leaves the app's %@ as it is." = "\n\nهذه البيانات لا تحتوي على مجلد %@. استعادتها تترك %@ الخاص بالتطبيق كما هو.";

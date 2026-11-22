@@ -60,6 +60,12 @@ int main(void)
             check([fm fileExistsAtPath:[library stringByAppendingPathComponent:@".wq-caches-preserved/nested/sentinel"]], @"conflict retains preserved original");
             check(unlinkat(fd, "Caches", AT_REMOVEDIR) == 0 && WQCacheSwapRecover(fd), @"recover after fixture conflict removed");
             check(WQCacheSwapRecover(fd), @"recovery idempotent");
+            // Precomposed characters: the link holds the decomposed form.
+            for (NSString *target in @[@"/private/var/Caf\u00e9/\u00fcber", @"/private/var/\ud55c\uae00", @"/private/var/Cafe\u0301"]) {
+                check(WQCacheSwapBegin(fd, target), @"begin swap with a non-ASCII target");
+                check(WQCacheSwapRecover(fd), @"recover a non-ASCII target");
+                check(WQCacheSwapRecover(fd), @"non-ASCII recovery idempotent");
+            }
             // Reset Access Cache (#42): a foreign Caches link without our
             // marker blocks every token; reset clears it, keeps everything.
             check(renameat(fd, "Caches", fd, "Caches-real") == 0 && symlinkat("/private/var/other-app-target", fd, "Caches") == 0,

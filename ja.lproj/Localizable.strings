@@ -1142,3 +1142,7 @@
 "This Apps Manager backup has no Documents or Library folder for %@." = "この Apps Manager バックアップには %@ の Documents または Library フォルダがありません。";
 "\n\nThe Apps Manager backup also holds App Group data (%@). It isn't imported: a backup holds the app's own data folder only." = "\n\nApps Manager バックアップには App Group のデータ（%@）も含まれています。バックアップに含まれるのはアプリ自身のデータフォルダだけなので、読み込まれません。";
 "\n\nIts keychain items are encrypted by Apps Manager and can't be imported." = "\n\nキーチェーン項目は Apps Manager によって暗号化されているため、読み込めません。";
+"An interrupted restore of %@ was closed because the app was removed or reinstalled since. The data from before the restore is kept as backup %@." = "%@ の中断された復元は終了しました。その後 App が削除または再インストールされたためです。復元前のデータはバックアップ %@ として残っています。";
+"An interrupted restore of %@ could not be undone because its safety backup %@ no longer exists. The recovery was closed; check the app's data and restore a backup if needed." = "%@ の中断された復元は元に戻せませんでした。安全用バックアップ %@ がもう存在しないためです。リカバリは終了しました。App のデータを確認し、必要ならバックアップを復元してください。";
+"\n\nSymbolic links in the ZIP that were left out: %lu." = "\n\nZIP 内の除外されたシンボリックリンク: %lu。";
+"\n\nThis data holds no %@ folder. Restoring it leaves the app's %@ as it is." = "\n\nこのデータには %@ フォルダがありません。復元しても App の %@ はそのまま残ります。";

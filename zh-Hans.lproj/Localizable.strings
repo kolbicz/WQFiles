@@ -1146,3 +1146,7 @@
 "This Apps Manager backup has no Documents or Library folder for %@." = "此 Apps Manager 备份中没有 %@ 的 Documents 或 Library 文件夹。";
 "\n\nThe Apps Manager backup also holds App Group data (%@). It isn't imported: a backup holds the app's own data folder only." = "\n\n此 Apps Manager 备份还包含 App Group 数据（%@）。这些数据不会导入：备份只包含 App 自己的数据文件夹。";
 "\n\nIts keychain items are encrypted by Apps Manager and can't be imported." = "\n\n其中的钥匙串项目已被 Apps Manager 加密，无法导入。";
+"An interrupted restore of %@ was closed because the app was removed or reinstalled since. The data from before the restore is kept as backup %@." = "%@ 的一次中断的恢复已关闭，因为该应用此后已被移除或重新安装。恢复前的数据保留为备份 %@。";
+"An interrupted restore of %@ could not be undone because its safety backup %@ no longer exists. The recovery was closed; check the app's data and restore a backup if needed." = "%@ 的一次中断的恢复无法撤销，因为其安全备份 %@ 已不存在。恢复流程已关闭；请检查该应用的数据，必要时恢复一个备份。";
+"\n\nSymbolic links in the ZIP that were left out: %lu." = "\n\nZIP 中被略过的符号链接：%lu。";
+"\n\nThis data holds no %@ folder. Restoring it leaves the app's %@ as it is." = "\n\n此数据不含 %@ 文件夹。恢复它时，应用的 %@ 保持不变。";

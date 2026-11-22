@@ -446,7 +446,9 @@ static int64_t wq_query(NSString *target, BOOL altFlags)
             int error = errno;
             wq_log_recovery_failure(libraryPath, error, wq_cache_state(library));
             if (handle >= 0) wq_release_handle(handle);
-            handle = -8;
+            // -5 stays: the cache couldn't even start a query, and that is
+            // the state wq_grant repairs. -8 would hide it from the repair.
+            if (handle != -5) handle = -8;
         }
         close(lock);
         close(library);
@@ -518,7 +520,20 @@ static BOOL wq_grant_opens(NSString *path)
     return errno != EPERM;
 }
 
+static BOOL wq_grant_unchecked(NSString *path);
+
+// Callers ask for a grant after a denied call and then still branch on that
+// call's errno (ENOENT = "nothing there"). The grant's own probes must not
+// replace it: a refused folder would otherwise read as a missing one.
 BOOL wq_grant(NSString *path)
+{
+    int saved = errno;
+    BOOL granted = wq_grant_unchecked(path);
+    errno = saved;
+    return granted;
+}
+
+static BOOL wq_grant_unchecked(NSString *path)
 {
     static dispatch_once_t once;
     dispatch_once(&once, ^{

@@ -130,6 +130,18 @@ static void TestJournalStates(void)
     WQCheck(!WQAppsSupportJournalAllowsNewRestore(WQAppsSupportJournalUnknown, &error) && error.length > 0);
     WQCheck(WQAppsSupportJournalAllowsNewRestore(WQAppsSupportJournalMissing, NULL));
     WQCheck(WQAppsSupportJournalAllowsNewRestore(WQAppsSupportJournalCommitted, NULL));
+    // A journal that can never be recovered is not kept: it would refuse every restore.
+    WQCheck(WQAppsSupportJournalFateFor(YES, NO, NO) == WQAppsSupportJournalRecover);
+    WQCheck(WQAppsSupportJournalFateFor(NO, NO, NO) == WQAppsSupportJournalSetAside);
+    WQCheck(WQAppsSupportJournalFateFor(NO, YES, YES) == WQAppsSupportJournalSetAside);
+    WQCheck(WQAppsSupportJournalFateFor(YES, YES, NO) == WQAppsSupportJournalCloseNoContainer);
+    WQCheck(WQAppsSupportJournalFateFor(YES, YES, YES) == WQAppsSupportJournalCloseNoContainer);
+    WQCheck(WQAppsSupportJournalFateFor(YES, NO, YES) == WQAppsSupportJournalCloseNoSafety);
+    // Only WQ Files' own backups empty a part they don't hold.
+    WQCheck(WQAppsSupportRestorePurgesMissingPart(@"Before restore"));
+    WQCheck(WQAppsSupportRestorePurgesMissingPart(@""));
+    WQCheck(WQAppsSupportRestorePurgesMissingPart(nil));
+    WQCheck(!WQAppsSupportRestorePurgesMissingPart(@"Imported"));
 }
 
 static void TestTreeSignatures(void)

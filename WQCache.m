@@ -491,10 +491,21 @@ static BOOL WQCacheValidateItem(WQCacheItem *item, NSString **reason)
 
 @end
 
+// Names a row across scans (the items themselves are rebuilt each time).
+static NSString *WQCacheSelectionKey(WQCacheItem *item)
+{
+    return [NSString stringWithFormat:@"%@\n%@\n%@\n%d", item.containerPath ?: @"", item.bundleID ?: @"",
+            item.customRelative ?: @"", (int)item.crashLogs];
+}
+
 @implementation WQCacheCleanerViewController {
     WQScanTask *_scanTask;
     NSDictionary *_shownScanResult;
     BOOL _selectNextResult;   // the scan finishing right now ran on this screen
+    // Rows the user unchecked by hand. A rescan that starts on its own (after
+    // 10 minutes, after cleaning) must not check them again; a pull to
+    // refresh starts over.
+    NSMutableSet<NSString *> *_handDeselected;
     BOOL _resumeScan;
 
     NSArray<WQCacheItem *> *_items;
@@ -555,7 +566,8 @@ static BOOL WQCacheValidateItem(WQCacheItem *item, NSString **reason)
             // up to 0.9.10 (#67); historical results (restored after a
             // restart, or finished elsewhere) never restore a destructive
             // selection implicitly.
-            item.selected = _selectNextResult && !item.limited && (!item.customRelative || item.customAutoSelect);
+            item.selected = _selectNextResult && !item.limited && (!item.customRelative || item.customAutoSelect) &&
+                ![_handDeselected containsObject:WQCacheSelectionKey(item)];
             [rows addObject:item];
         }
         _items = rows;
@@ -734,7 +746,15 @@ static BOOL WQCacheValidateItem(WQCacheItem *item, NSString **reason)
     }
     wq_enumerate_invalidate();
     wq_display_names_reset_miss();
+    [_handDeselected removeAllObjects];
     [self scan];
+}
+
+- (void)noteSelectionByHand:(WQCacheItem *)item
+{
+    if (!_handDeselected) _handDeselected = [NSMutableSet new];
+    if (item.selected) [_handDeselected removeObject:WQCacheSelectionKey(item)];
+    else [_handDeselected addObject:WQCacheSelectionKey(item)];
 }
 
 // The one refresh after cleaning: the pull to refresh that came in during
@@ -1142,6 +1162,7 @@ static BOOL WQCacheValidateItem(WQCacheItem *item, NSString **reason)
         return;
     }
     item.selected = !item.selected;
+    [self noteSelectionByHand:item];
     [tableView reloadRowsAtIndexPaths:@[indexPath, [NSIndexPath indexPathForRow:0 inSection:0]]
                      withRowAnimation:UITableViewRowAnimationNone];
     [self updateButtons];
@@ -1228,14 +1249,20 @@ static BOOL WQCacheValidateItem(WQCacheItem *item, NSString **reason)
 - (void)selectWhere:(BOOL (^)(WQCacheItem *item))rule
 {
     for (WQCacheItem *it in self.visibleItems)
-        if (!it.customRelative || it.customAutoSelect) it.selected = !it.limited && rule(it);
+        if (!it.customRelative || it.customAutoSelect) {
+            it.selected = !it.limited && rule(it);
+            if (!it.limited) [self noteSelectionByHand:it];
+        }
     [self.tableView reloadData];
     [self updateButtons];
 }
 
 - (void)clearSelection
 {
-    for (WQCacheItem *item in _items) item.selected = NO;
+    for (WQCacheItem *item in _items) {
+        item.selected = NO;
+        if (!item.limited) [self noteSelectionByHand:item];
+    }
     [self.tableView reloadData];
     [self updateButtons];
 }

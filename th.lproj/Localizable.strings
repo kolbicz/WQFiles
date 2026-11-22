@@ -1146,3 +1146,7 @@
 "This Apps Manager backup has no Documents or Library folder for %@." = "ข้อมูลสำรองของ Apps Manager นี้ไม่มีโฟลเดอร์ Documents หรือ Library สำหรับ %@";
 "\n\nThe Apps Manager backup also holds App Group data (%@). It isn't imported: a backup holds the app's own data folder only." = "\n\nข้อมูลสำรองของ Apps Manager ยังมีข้อมูล App Group (%@) ด้วย ซึ่งจะไม่ถูกนำเข้า: ข้อมูลสำรองมีเฉพาะโฟลเดอร์ข้อมูลของแอปเอง";
 "\n\nIts keychain items are encrypted by Apps Manager and can't be imported." = "\n\nรายการพวงกุญแจของข้อมูลสำรองนี้ถูก Apps Manager เข้ารหัสไว้และนำเข้าไม่ได้";
+"An interrupted restore of %@ was closed because the app was removed or reinstalled since. The data from before the restore is kept as backup %@." = "การกู้คืนของ %@ ที่ถูกขัดจังหวะถูกปิดแล้ว เพราะแอปถูกลบหรือติดตั้งใหม่หลังจากนั้น ข้อมูลก่อนการกู้คืนถูกเก็บไว้เป็นข้อมูลสำรอง %@";
+"An interrupted restore of %@ could not be undone because its safety backup %@ no longer exists. The recovery was closed; check the app's data and restore a backup if needed." = "ไม่สามารถย้อนการกู้คืนของ %@ ที่ถูกขัดจังหวะได้ เพราะข้อมูลสำรองนิรภัย %@ ไม่มีอยู่แล้ว การกู้คืนถูกปิดแล้ว โปรดตรวจสอบข้อมูลของแอปและกู้คืนข้อมูลสำรองหากจำเป็น";
+"\n\nSymbolic links in the ZIP that were left out: %lu." = "\n\nลิงก์สัญลักษณ์ใน ZIP ที่ถูกข้าม: %lu";
+"\n\nThis data holds no %@ folder. Restoring it leaves the app's %@ as it is." = "\n\nข้อมูลนี้ไม่มีโฟลเดอร์ %@ การกู้คืนจะคง %@ ของแอปไว้ตามเดิม";

@@ -1275,6 +1275,7 @@ static void WQAppScanWatch(WQScanCancellation *cancellation, NSUInteger lastSeri
         __block NSArray<NSString *> *declared = @[];
         __block NSArray *ignored = @[], *adbkGroups = @[];
         __block BOOL adbkKeychain = NO;
+        __block NSUInteger skippedLinks = 0;
         NSString *work = [NSTemporaryDirectory() stringByAppendingPathComponent:
                           [@"wq-import-" stringByAppendingString:NSUUID.UUID.UUIDString]];
         NSFileManager *fm = NSFileManager.defaultManager;
@@ -1298,6 +1299,7 @@ static void WQAppScanWatch(WQScanCancellation *cancellation, NSUInteger lastSeri
                     error = WQLocalizedFormat(@"The ZIP couldn't be unpacked: %@", error ?: WQLocalized(@"unknown error"));
                     return;
                 }
+                skippedLinks = skipped;
                 source = work;
             }
             NSString *root = WQAppsSupportImportRoot(source, &error);
@@ -1328,6 +1330,12 @@ static void WQAppScanWatch(WQScanCancellation *cancellation, NSUInteger lastSeri
                declared.count ? [declared componentsJoinedByString:@", "] : @"nothing",
                dest ? dest.lastPathComponent : (error ?: @"needs confirmation"),
                ignored.count ? [NSString stringWithFormat:@" (left out: %@)", [ignored componentsJoinedByString:@", "]] : @"");
+        if (dest && skippedLinks)
+            wq_log(@"import backup %@: %lu symbolic links in the ZIP were left out", bundleID, (unsigned long)skippedLinks);
+        // An import may hold one part only; restoring it leaves the other alone.
+        NSMutableArray<NSString *> *absent = [NSMutableArray new];
+        for (NSString *part in kAppBackupParts())
+            if (dest && ![fm fileExistsAtPath:[dest stringByAppendingPathComponent:part]]) [absent addObject:part];
         if (adbkGroups.count || adbkKeychain)
             wq_log(@"import backup %@: Apps Manager backup; App Groups not imported: %@; keychain items: %@", bundleID,
                    adbkGroups.count ? [adbkGroups componentsJoinedByString:@", "] : @"none", adbkKeychain ? @"not imported" : @"none");
@@ -1361,6 +1369,11 @@ static void WQAppScanWatch(WQScanCancellation *cancellation, NSUInteger lastSeri
                                                       [adbkGroups componentsJoinedByString:@", "])];
             if (adbkKeychain)
                 [notes appendString:WQLocalized(@"\n\nIts keychain items are encrypted by Apps Manager and can't be imported.")];
+            if (skippedLinks)
+                [notes appendString:WQLocalizedFormat(@"\n\nSymbolic links in the ZIP that were left out: %lu.", (unsigned long)skippedLinks)];
+            if (absent.count == 1)
+                [notes appendString:WQLocalizedFormat(@"\n\nThis data holds no %@ folder. Restoring it leaves the app's %@ as it is.",
+                                                      absent.firstObject, absent.firstObject)];
             NSString *message = WQLocalizedFormat(@"Saved as backup %@ of %@. It's verified like any other backup and can be restored from Apps.%@",
                 dest.lastPathComponent, app.name, notes);
             UIAlertController *done = wq_alert_controller(@"Imported", message, UIAlertControllerStyleAlert);
@@ -1664,6 +1677,19 @@ static BOOL wq_remove_restore_journal(NSString **error)
     return YES;
 }
 
+// A journal that can't be used is renamed, not deleted: it stops blocking
+// restores, and the file is still there to look at.
+static BOOL wq_set_restore_journal_aside(void)
+{
+    NSString *path = wq_restore_journal_path();
+    NSString *aside = [path.stringByDeletingLastPathComponent stringByAppendingPathComponent:
+                       [NSString stringWithFormat:@"restore-journal-set-aside-%@.plist", NSUUID.UUID.UUIDString]];
+    BOOL moved = [NSFileManager.defaultManager moveItemAtPath:path toPath:aside error:nil];
+    wq_log(@"restore recovery: unusable journal %@", moved ? [@"set aside as " stringByAppendingString:aside.lastPathComponent]
+                                                           : @"could not be set aside");
+    return moved;
+}
+
 static BOOL wq_finish_restore_journal(NSString **error)
 {
     if (!wq_mark_restore_journal_committed(error)) return NO;
@@ -1782,6 +1808,7 @@ NSString *wq_recover_interrupted_restore(void)
     }
     if (![state isEqualToString:@"Active"]) {
         wq_log(@"restore recovery: unknown journal state at %@", path);
+        wq_set_restore_journal_aside();
         return WQLocalized(@"An interrupted restore was found with an unknown recovery state. The journal was retained for manual recovery.");
     }
     NSString *bundleID = journal[@"BundleID"], *container = journal[@"Container"], *safety = journal[@"Safety"];
@@ -1795,10 +1822,35 @@ NSString *wq_recover_interrupted_restore(void)
         [deviceValue compare:@1] != NSOrderedAscending && [inodeValue compare:@1] != NSOrderedAscending;
     dev_t device = identityFields ? [deviceValue unsignedLongLongValue] : 0;
     ino_t inode = identityFields ? [inodeValue unsignedLongLongValue] : 0;
-    BOOL journalTyped = stringFields && WQAppsSupportIsInteger(journal[@"Format"]) && [journal[@"Format"] unsignedIntegerValue] == 2 &&
+    BOOL fieldsValid = stringFields && WQAppsSupportIsInteger(journal[@"Format"]) && [journal[@"Format"] unsignedIntegerValue] == 2 &&
         identityFields && bundleID.length && container.length && safety.length && backup.length && device && inode &&
-        wq_backup_root_child(backup, bundleID) && wq_backup_root_child(safety, bundleID) &&
-        wq_validate_container(container, bundleID, device, inode, &journalError);
+        wq_backup_root_child(backup, bundleID) && wq_backup_root_child(safety, bundleID);
+    // Only definite answers count: ENOENT, or a folder with another identity.
+    // A refusal (EPERM) may pass, so it keeps the journal for the next launch.
+    struct stat containerStat, safetyStat;
+    BOOL containerGone = NO, safetyMissing = NO;
+    if (fieldsValid) {
+        if (lstat(container.fileSystemRepresentation, &containerStat) != 0) containerGone = errno == ENOENT;
+        else containerGone = S_ISDIR(containerStat.st_mode) && (containerStat.st_dev != device || containerStat.st_ino != inode);
+        safetyMissing = lstat(safety.fileSystemRepresentation, &safetyStat) != 0 && errno == ENOENT;
+    }
+    WQAppsSupportJournalFate fate = WQAppsSupportJournalFateFor(fieldsValid, containerGone, safetyMissing);
+    if (fate == WQAppsSupportJournalCloseNoContainer || fate == WQAppsSupportJournalCloseNoSafety) {
+        // Nothing can be rolled back any more, now or at any later launch.
+        NSString *closeError = nil;
+        if (wq_remove_restore_journal(&closeError)) {
+            wq_log(@"restore recovery for %@: closed without a rollback (%@)", bundleID,
+                   fate == WQAppsSupportJournalCloseNoContainer ? @"the container is gone or was replaced" : @"the safety backup is gone");
+            return fate == WQAppsSupportJournalCloseNoContainer
+                ? [NSString stringWithFormat:WQLocalized(@"An interrupted restore of %@ was closed because the app was removed or reinstalled since. The data from before the restore is kept as backup %@."),
+                   bundleID, safety.lastPathComponent]
+                : [NSString stringWithFormat:WQLocalized(@"An interrupted restore of %@ could not be undone because its safety backup %@ no longer exists. The recovery was closed; check the app's data and restore a backup if needed."),
+                   bundleID, safety.lastPathComponent];
+        }
+        wq_log(@"restore recovery for %@: the journal could not be removed (%@)", bundleID, closeError);
+    }
+    if (fate == WQAppsSupportJournalSetAside) wq_set_restore_journal_aside();
+    BOOL journalTyped = fieldsValid && wq_validate_container(container, bundleID, device, inode, &journalError);
     if (!journalTyped) {
         wq_log(@"restore recovery: invalid journal or incomplete safety backup at %@", path);
         return [NSString stringWithFormat:WQLocalized(@"An interrupted restore was found, but its recovery journal is invalid. The journal was retained for manual recovery%@."),
@@ -1892,6 +1944,7 @@ NSString *wq_recover_interrupted_restore(void)
     BOOL ok = YES;
     NSDictionary *restorePlan = WQRestorePlan([parts containsObject:@"Documents"],
                                                [parts containsObject:@"Library"]);
+    BOOL purgeMissing = WQAppsSupportRestorePurgesMissingPart(manifest[@"Reason"]);
     for (NSString *part in kAppBackupParts()) {
         if (!ok) break;
         NSString *src = [staging stringByAppendingPathComponent:part];
@@ -1904,6 +1957,8 @@ NSString *wq_recover_interrupted_restore(void)
             unsigned long long ignored = 0;
             if (!wq_purge_and_verify(dst, &ignored, &error) ||
                 !wq_copy_part_and_verify(src, dst, NULL, &error)) { ok = NO; break; }
+        } else if (!purgeMissing) {
+            wq_log(@"restore %@: the imported backup holds no %@; the app's %@ is left as it is", app.bundleID, part, part);
         } else {
             unsigned long long ignored = 0;
             if (!wq_purge_and_verify(dst, &ignored, &error)) {

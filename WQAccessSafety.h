@@ -177,7 +177,13 @@ static inline BOOL WQCacheSwapRecover(int library)
             ssize_t n = S_ISLNK(current.st_mode) ? readlinkat(library, "Caches", link, sizeof(link) - 1) : -1;
             if (n < 0) { errno = EEXIST; return NO; }
             link[n] = 0;
-            if (![record[@"Target"] isEqualToString:[NSString stringWithUTF8String:link]]) { errno = EEXIST; return NO; }
+            // The link was created from the target's file-system form, which
+            // decomposes characters (é, ü, Hangul): compare in that form, or a
+            // precomposed target never matches and the swap stays stuck.
+            NSString *recorded = record[@"Target"];
+            BOOL ours = [recorded isEqualToString:[NSString stringWithUTF8String:link] ?: @""] ||
+                (recorded.length && strcmp(link, recorded.fileSystemRepresentation) == 0);
+            if (!ours) { errno = EEXIST; return NO; }
             if (unlinkat(library, "Caches", 0) != 0) return NO;
         }
         if (renameatx_np(library, WQCacheSaved, library, "Caches", RENAME_EXCL) != 0) return NO;

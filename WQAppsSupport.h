@@ -388,6 +388,32 @@ static inline BOOL WQAppsSupportJournalAllowsNewRestore(WQAppsSupportJournalStat
     return YES;
 }
 
+// What launch recovery does with an Active journal before trying a rollback.
+// A journal that can never be recovered must not stay: while it exists every
+// restore of every app is refused.
+typedef NS_ENUM(NSInteger, WQAppsSupportJournalFate) {
+    WQAppsSupportJournalRecover = 0,        // roll back from the safety backup
+    WQAppsSupportJournalSetAside,           // fields unusable: rename it, keep the file
+    WQAppsSupportJournalCloseNoContainer,   // the app was removed or reinstalled
+    WQAppsSupportJournalCloseNoSafety,      // the safety backup was deleted
+};
+
+static inline WQAppsSupportJournalFate WQAppsSupportJournalFateFor(BOOL fieldsValid, BOOL containerGone, BOOL safetyMissing)
+{
+    if (!fieldsValid) return WQAppsSupportJournalSetAside;
+    if (containerGone) return WQAppsSupportJournalCloseNoContainer;
+    if (safetyMissing) return WQAppsSupportJournalCloseNoSafety;
+    return WQAppsSupportJournalRecover;
+}
+
+// Whether restoring a backup empties a part the backup doesn't hold. WQ Files'
+// own backups record every part the app had, so a missing part means "the app
+// had none". An imported ZIP or .adbk only says "not included".
+static inline BOOL WQAppsSupportRestorePurgesMissingPart(NSString *reason)
+{
+    return ![reason isKindOfClass:NSString.class] || ![reason isEqualToString:@"Imported"];
+}
+
 #pragma mark - Import as Backup
 
 // Apps Manager backups (.adbk, a ZIP; issue #19): Binfo.plist (id,

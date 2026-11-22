@@ -2973,7 +2973,6 @@ static NSString *wq_sqlite_set_key(NSString *path)
             self->_allEnumerated = haveFullPaths;
             [self applyFilter];
             [self countChildrenOf:items generation:generation cancellation:cancellation];
-            [self measureFolderSizesOf:items generation:generation];
             self->_error = (names || childPaths != nil) ? nil
                 : (error.length ? error
                    : !wq_app_group() ? WQLocalized(@"WQ Files has no App Group, so it can't open other apps' folders. Re-sign it with a tool that keeps the App Group (see Signing in the README).")
@@ -2985,6 +2984,9 @@ static NSString *wq_sqlite_set_key(NSString *path)
             [self updateHeader];
             [self updateEmptyState];
             [self.tableView reloadData];
+            // After _error is current and the rows are on screen: an error
+            // just cleared no longer stops it, and visible rows go first.
+            [self measureFolderSizesOf:items generation:generation];
             [self updateBackupSelectionAvailability];
             if (self->_selectingBackups) [self updateBackupSelectionBar];
             if (self->_selectingFiles) {
@@ -3055,7 +3057,8 @@ static NSString *wq_sqlite_set_key(NSString *path)
             anyCached = YES;
         } else [todo addObject:item];
     }
-    if (anyCached && wq_sort_key() == WQSortSize) [self applyFilter];
+    // The order changed with the sizes: the rows have to follow the items.
+    if (anyCached && wq_sort_key() == WQSortSize) [self resortAfterChange];
     if (!todo.count) return;
     WQScanCancellation *cancellation = [WQScanCancellation new];
     _sizeCancellation = cancellation;
@@ -3072,7 +3075,7 @@ static NSString *wq_sqlite_set_key(NSString *path)
     void (^refresh)(BOOL) = ^(BOOL last) {
         WQDirViewController *strongSelf = weakSelf;
         if (!strongSelf || generation != strongSelf->_scanGeneration || strongSelf->_error) return;
-        if (last && wq_sort_key() == WQSortSize) { [strongSelf applyFilter]; return; }
+        if (last && wq_sort_key() == WQSortSize) { [strongSelf resortAfterChange]; return; }
         NSArray *rows = strongSelf.tableView.indexPathsForVisibleRows;
         if (rows.count) [strongSelf.tableView reconfigureRowsAtIndexPaths:rows];
     };
@@ -3840,6 +3843,10 @@ static NSString *wq_free_name_in(NSString *dir, NSString *name, NSMutableSet<NSS
         // An imported SQLite database goes in before its -wal/-shm, which are
         // skipped when it fails: a -wal on top of another database corrupts it.
         NSMutableDictionary<NSString *, NSString *> *failedSets = [NSMutableDictionary new];
+        // A database that got another name ("db 2.sqlite") takes its -wal/-shm
+        // along: under their own names they would sit beside the database
+        // that was already here, which then replays a foreign -wal.
+        NSMutableDictionary<NSString *, NSString *> *movedSets = [NSMutableDictionary new];
         for (NSNumber *index in wq_sqlite_family_order(sources)) {
             NSString *source = sources[index.unsignedIntegerValue];
             NSString *e = nil;
@@ -3851,6 +3858,17 @@ static NSString *wq_free_name_in(NSString *dir, NSString *name, NSMutableSet<NSS
             if (failedSets[set]) {
                 e = wq_sqlite_family_skipped_text(failedSets[set]);
                 ok = NO;
+            } else if (movedSets[set] && name.length > set.length) {
+                name = [movedSets[set] stringByAppendingString:[name substringFromIndex:set.length]];
+                struct stat taken;
+                if ([claimed containsObject:name.lowercaseString] || wq_stat([dir stringByAppendingPathComponent:name], &taken)) {
+                    e = wq_sqlite_family_skipped_text(movedSets[set]);
+                    ok = NO;
+                } else {
+                    [claimed addObject:name.lowercaseString];
+                    ok = wq_create_file_from([dir stringByAppendingPathComponent:name], source, &e);
+                    if (ok) renamed++;
+                }
             } else if (expected && ![claimed containsObject:name.lowercaseString]) {
                 ok = wq_write_from_file_if_unchanged(existing, source, expected, &e);
                 [claimed addObject:name.lowercaseString];
@@ -3858,7 +3876,10 @@ static NSString *wq_free_name_in(NSString *dir, NSString *name, NSMutableSet<NSS
             } else {
                 name = wq_free_name_in(dir, source.lastPathComponent, claimed);
                 ok = name && wq_create_file_from([dir stringByAppendingPathComponent:name], source, &e);
-                if (ok && ![name isEqualToString:source.lastPathComponent]) renamed++;
+                if (ok && ![name isEqualToString:source.lastPathComponent]) {
+                    renamed++;
+                    if ([source.lastPathComponent.lowercaseString isEqualToString:set]) movedSets[set] = name;
+                }
             }
             [NSFileManager.defaultManager removeItemAtPath:source error:nil];
             if (ok) done++;
