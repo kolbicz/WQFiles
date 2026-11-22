@@ -1150,3 +1150,4 @@
 "An interrupted restore of %@ could not be undone because its safety backup %@ no longer exists. The recovery was closed; check the app's data and restore a backup if needed." = "%@ için yarıda kalan bir geri yükleme geri alınamadı, çünkü güvenlik yedeği %@ artık yok. Kurtarma kapatıldı; uygulamanın verilerini kontrol edin ve gerekirse bir yedeği geri yükleyin.";
 "\n\nSymbolic links in the ZIP that were left out: %lu." = "\n\nZIP içinde dışarıda bırakılan sembolik bağlantılar: %lu.";
 "\n\nThis data holds no %@ folder. Restoring it leaves the app's %@ as it is." = "\n\nBu veriler %@ klasörünü içermiyor. Geri yüklendiğinde uygulamanın %@ klasörü olduğu gibi kalır.";
+"The connection is not encrypted: others on the same network can read the password and the files. Share only on a network you trust." = "Bağlantı şifrelenmez: aynı ağdaki başkaları parolayı ve dosyaları okuyabilir. Yalnızca güvendiğiniz bir ağda paylaşın.";

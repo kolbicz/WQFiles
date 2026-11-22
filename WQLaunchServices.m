@@ -5,8 +5,12 @@
 //
 
 #import "WQLaunchServices.h"
+#import "WQCore.h"
 #include <sys/sysctl.h>
 #import "WQLocalization.h"
+
+WQ_DEFINE_LOCK(wq_ls_layout_cache_lock)
+WQ_DEFINE_LOCK(wq_ls_summary_lock)
 #import "WQAccess.h"
 #import <stdlib.h>
 #import <string.h>
@@ -508,7 +512,7 @@ static BOOL wq_ls_auto_layout(const uint8_t *b, size_t n, size_t heap, NSData *p
     NSMutableData *key = [NSMutableData dataWithBytes:&n length:sizeof(n)];
     [key appendBytes:b length:MIN(n, (size_t)65536)];
     if (n > 65536) [key appendBytes:b + n - 65536 length:65536];
-    @synchronized (NSObject.class) {
+    @synchronized (wq_ls_layout_cache_lock()) {
         if ([cachedKey isEqualToData:key]) {
             if (![cachedResult[@"ok"] boolValue]) return NO;
             if (containersOut) *containersOut = cachedResult[@"containers"];
@@ -520,7 +524,7 @@ static BOOL wq_ls_auto_layout(const uint8_t *b, size_t n, size_t heap, NSData *p
     NSDictionary *computedContainers = nil, *computedDisplay = nil;
     NSString *computedDescription = nil;
     BOOL ok = wq_ls_auto_layout_compute(b, n, heap, pathRefs, &computedContainers, &computedDisplay, &computedDescription);
-    @synchronized (NSObject.class) {
+    @synchronized (wq_ls_layout_cache_lock()) {
         cachedKey = key;
         cachedResult = ok ? @{ @"ok": @YES, @"containers": computedContainers, @"display": computedDisplay,
                                @"description": computedDescription } : @{ @"ok": @NO };
@@ -1018,7 +1022,7 @@ static BOOL wq_parse_ls_store(NSData *data, NSDictionary **displayOut,
     NSString *summary = [NSString stringWithFormat:@"%zu %zu %lu %lu", n, chosen, (unsigned long)display.count,
                          (unsigned long)containers.count];
     BOOL newSummary;
-    @synchronized (NSObject.class) {
+    @synchronized (wq_ls_summary_lock()) {
         newSummary = ![summary isEqualToString:lastSummary];
         if (newSummary) lastSummary = summary;
     }

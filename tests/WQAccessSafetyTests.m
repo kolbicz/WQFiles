@@ -208,6 +208,18 @@ int main(void)
             check(WQIdentityAttributeIdentifier(utf8(@"identifier: \n")) == nil, @"empty identifier gives nothing");
             check(WQIdentityAttributeIdentifier(utf8(@"identifier: a b\n")) == nil, @"identifier with spaces gives nothing");
             close(fd);
+            // Samples for the app-bundle probe: every index once, spread out.
+            check([WQSpreadSampleIndexes(0, 3) isEqualToArray:@[]] && [WQSpreadSampleIndexes(1, 3) isEqualToArray:@[@0]] &&
+                  [WQSpreadSampleIndexes(2, 3) isEqualToArray:(@[@0, @1])] && [WQSpreadSampleIndexes(3, 3) isEqualToArray:(@[@0, @1, @2])] &&
+                  [WQSpreadSampleIndexes(10, 3) isEqualToArray:(@[@0, @3, @6])], @"sample indexes never repeat (2 items: both)");
+            // Update check: version from source.json, compared as numbers.
+            check([WQUpdateVersionInSource(utf8(@"{\"apps\":[{\"version\":\"0.9.21\"},{\"version\":\"9\"}]}")) isEqualToString:@"0.9.21"],
+                  @"update version is the first app's");
+            check(!WQUpdateVersionInSource(utf8(@"{\"apps\":[]}")) && !WQUpdateVersionInSource(utf8(@"[1]")) && !WQUpdateVersionInSource(utf8(@"x")) &&
+                  !WQUpdateVersionInSource(utf8(@"{\"apps\":[{\"version\":7}]}")) && !WQUpdateVersionInSource([NSData data]) &&
+                  !WQUpdateVersionInSource(utf8(@"{\"apps\":[{\"version\":\"1.2.3.4.5.6.7.8.9.10.11\"}]}")), @"anything else in source.json gives no version");
+            check(WQVersionIsNewer(@"0.9.20", @"0.9.9") && !WQVersionIsNewer(@"0.9.9", @"0.9.20") && !WQVersionIsNewer(@"1.0", @"1.0") &&
+                  !WQVersionIsNewer(nil, @"1.0") && !WQVersionIsNewer(@"", @"1.0"), @"versions compare by number, not as text");
         } @finally {
             [fm removeItemAtPath:base error:nil];
         }

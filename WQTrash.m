@@ -177,10 +177,24 @@ BOOL wq_restore_deleted(WQDeletedItem *item, NSString **errorText)
         [created addObject:folder];
         [identities addObject:identity];
     }
-    if (ok) ok = wq_create_file_from(item.originalPath, item.backupPath, errorText);
+    // All or nothing for a SQLite database: what can be known to fail is
+    // checked first, and a database already put back is taken out again when
+    // its -wal/-shm can't be reset (it would open with data that isn't its).
+    if (ok) ok = wq_sqlite_restore_sidecars_possible(item.originalPath, item.backupPath, errorText);
+    NSDictionary *published = nil;
+    if (ok) {
+        ok = wq_create_file_from(item.originalPath, item.backupPath, errorText);
+        if (ok) published = wq_item_identity(item.originalPath);
+    }
     // A deleted SQLite database whose -wal/-shm stayed behind would reopen
     // with them; they're kept in Backups and replaced or emptied.
-    if (ok) ok = wq_sqlite_restore_sidecars(item.originalPath, item.backupPath, nil, errorText);
+    if (ok && !wq_sqlite_restore_sidecars(item.originalPath, item.backupPath, nil, errorText)) {
+        ok = NO;
+        NSString *undoError = nil;
+        BOOL undone = published && wq_delete_expecting(item.originalPath, published, &undoError);
+        wq_log(@"recently deleted: %@ was taken out again after its -wal/-shm could not be reset: %@",
+               item.originalPath, undone ? @"OK (it is in Recently Deleted)" : (undoError ?: @"FAILED; the restored file is still there"));
+    }
     if (!ok) {
         for (NSUInteger i = created.count; i-- > 0; ) {
             if (!wq_delete_expecting(created[i], identities[i], NULL)) break;   // not empty or not ours: stop there

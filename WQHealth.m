@@ -152,9 +152,10 @@ NSArray<WQHealthCheck *> *wq_health_run(void (^stage)(NSString *))
     BOOL bundles = NO;
     if (access == WQHealthOK) {
         NSArray<NSString *> *all = wq_ls_bundle_containers();
-        for (NSUInteger i = 0; i < all.count && i < 3 && !bundles; i++) {
-            NSString *b = all[i * all.count / 3];
+        for (NSNumber *index in WQSpreadSampleIndexes(all.count, 3)) {
+            NSString *b = all[index.unsignedIntegerValue];
             bundles = wq_grant(b) && wq_list(b, NULL) != nil;
+            if (bundles) break;
         }
         wq_log(@"health: app bundle folders %@", bundles ? @"open" : @"don't open (App Bundles hidden)");
     }

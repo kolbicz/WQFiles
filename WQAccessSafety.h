@@ -314,6 +314,35 @@ static inline BOOL WQCacheSwapBegin(int library, NSString *target)
     return symlinkat(target.fileSystemRepresentation, library, "Caches") == 0;
 }
 
+// The newest version named by the AltStore source (source.json): the first
+// app's "version", a short string. nil for anything else.
+static inline NSString *WQUpdateVersionInSource(NSData *data)
+{
+    if (!data.length) return nil;
+    id json = [NSJSONSerialization JSONObjectWithData:data options:0 error:nil];
+    id apps = [json isKindOfClass:NSDictionary.class] ? json[@"apps"] : nil;
+    id app = [apps isKindOfClass:NSArray.class] && [apps count] ? [apps firstObject] : nil;
+    id version = [app isKindOfClass:NSDictionary.class] ? app[@"version"] : nil;
+    if (![version isKindOfClass:NSString.class] || ![version length] || [version length] > 20) return nil;
+    return version;
+}
+
+// "0.9.20" is newer than "0.9.9": the parts compare as numbers.
+static inline BOOL WQVersionIsNewer(NSString *candidate, NSString *mine)
+{
+    return candidate.length && [candidate compare:mine options:NSNumericSearch] == NSOrderedDescending;
+}
+
+// Up to `samples` indexes spread over `count` items, each once, in order
+// (2 of 2 gives 0 and 1; 3 of 10 gives 0, 3 and 6).
+static inline NSArray<NSNumber *> *WQSpreadSampleIndexes(NSUInteger count, NSUInteger samples)
+{
+    NSUInteger n = MIN(count, samples);
+    NSMutableArray<NSNumber *> *indexes = [NSMutableArray arrayWithCapacity:n];
+    for (NSUInteger i = 0; i < n; i++) [indexes addObject:@(i * count / n)];
+    return indexes;
+}
+
 static inline BOOL WQAbsolutePathGrammar(NSString *path)
 {
     if (![path hasPrefix:@"/"] || path.length < 2 || [path rangeOfString:@"\0"].location != NSNotFound) return NO;

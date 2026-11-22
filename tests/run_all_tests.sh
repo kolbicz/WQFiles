@@ -89,6 +89,7 @@ compile_run WQPlistEditorSupportTests tests/WQPlistEditorSupportTests.m
 compile_run WQHexViewerHelpersTests tests/WQHexViewerHelpersTests.m
 compile_run WQArchiveTests WQArchive.m WQLocalization.m tests/WQArchiveTests.m -lz
 compile_run WQSyntaxTests WQSyntax.m tests/WQSyntaxTests.m
+compile_run WQWebSupportTests tests/WQWebSupportTests.m
 compile_run WQMediaStreamTests WQMediaStream.m tests/WQMediaStreamTests.m -framework AVFoundation -framework UniformTypeIdentifiers
 compile_run WQSQLiteSaveTests WQLocalization.m WQCore.m tests/WQSQLiteSaveTests.m -lsqlite3
 compile_run WQSQLiteSupportTests WQLocalization.m tests/WQSQLiteSupportTests.m -lsqlite3

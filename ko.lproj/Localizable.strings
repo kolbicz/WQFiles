@@ -1150,3 +1150,4 @@
 "An interrupted restore of %@ could not be undone because its safety backup %@ no longer exists. The recovery was closed; check the app's data and restore a backup if needed." = "%@의 중단된 복원을 되돌릴 수 없습니다. 안전 백업 %@이(가) 더 이상 없기 때문입니다. 복구가 종료되었습니다. 앱 데이터를 확인하고 필요하면 백업을 복원하세요.";
 "\n\nSymbolic links in the ZIP that were left out: %lu." = "\n\nZIP에서 제외된 심볼릭 링크: %lu개.";
 "\n\nThis data holds no %@ folder. Restoring it leaves the app's %@ as it is." = "\n\n이 데이터에는 %@ 폴더가 없습니다. 복원해도 앱의 %@은(는) 그대로 유지됩니다.";
+"The connection is not encrypted: others on the same network can read the password and the files. Share only on a network you trust." = "연결이 암호화되지 않습니다. 같은 네트워크의 다른 사람이 암호와 파일을 읽을 수 있습니다. 신뢰하는 네트워크에서만 공유하세요.";

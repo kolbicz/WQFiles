@@ -1150,3 +1150,4 @@
 "An interrupted restore of %@ could not be undone because its safety backup %@ no longer exists. The recovery was closed; check the app's data and restore a backup if needed." = "%@ 的一次中断的恢复无法撤销，因为其安全备份 %@ 已不存在。恢复流程已关闭；请检查该应用的数据，必要时恢复一个备份。";
 "\n\nSymbolic links in the ZIP that were left out: %lu." = "\n\nZIP 中被略过的符号链接：%lu。";
 "\n\nThis data holds no %@ folder. Restoring it leaves the app's %@ as it is." = "\n\n此数据不含 %@ 文件夹。恢复它时，应用的 %@ 保持不变。";
+"The connection is not encrypted: others on the same network can read the password and the files. Share only on a network you trust." = "连接未加密：同一网络中的其他人可以读取密码和文件。请只在你信任的网络中共享。";

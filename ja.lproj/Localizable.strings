@@ -1146,3 +1146,4 @@
 "An interrupted restore of %@ could not be undone because its safety backup %@ no longer exists. The recovery was closed; check the app's data and restore a backup if needed." = "%@ の中断された復元は元に戻せませんでした。安全用バックアップ %@ がもう存在しないためです。リカバリは終了しました。App のデータを確認し、必要ならバックアップを復元してください。";
 "\n\nSymbolic links in the ZIP that were left out: %lu." = "\n\nZIP 内の除外されたシンボリックリンク: %lu。";
 "\n\nThis data holds no %@ folder. Restoring it leaves the app's %@ as it is." = "\n\nこのデータには %@ フォルダがありません。復元しても App の %@ はそのまま残ります。";
+"The connection is not encrypted: others on the same network can read the password and the files. Share only on a network you trust." = "接続は暗号化されません。同じネットワーク上のほかの人がパスワードとファイルを読み取れます。信頼できるネットワークでのみ共有してください。";

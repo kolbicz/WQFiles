@@ -558,6 +558,14 @@ typedef NS_ENUM(NSInteger, WQThemeSection) { WQThemeSectionThemes, WQThemeSectio
     UIActivityViewController *share = [[UIActivityViewController alloc] initWithActivityItems:@[file] applicationActivities:nil];
     share.popoverPresentationController.sourceView = source ?: self.view;
     share.popoverPresentationController.sourceRect = source ? source.bounds : CGRectMake(CGRectGetMidX(self.view.bounds), 80, 1, 1);
+    // An exported theme sits in its own temporary folder: gone once shared
+    // or cancelled (the launch sweep catches what a kill leaves).
+    NSString *exportDir = file.path.stringByDeletingLastPathComponent;
+    if ([exportDir.lastPathComponent hasPrefix:@"WQTheme-"] && [exportDir hasPrefix:NSTemporaryDirectory().stringByStandardizingPath]) {
+        share.completionWithItemsHandler = ^(UIActivityType __unused type, BOOL __unused completed, NSArray *__unused items, NSError *__unused error) {
+            [NSFileManager.defaultManager removeItemAtPath:exportDir error:nil];
+        };
+    }
     [self presentViewController:share animated:YES completion:nil];
 }
 
@@ -567,8 +575,9 @@ typedef NS_ENUM(NSInteger, WQThemeSection) { WQThemeSectionThemes, WQThemeSectio
     [alert addTextFieldWithConfigurationHandler:^(UITextField *field) { field.text = WQLocalized(@"My Theme"); }];
     [alert addAction:wq_alert_action(@"Cancel", UIAlertActionStyleCancel, nil)];
     __weak typeof(self) weakSelf = self;
+    __weak UIAlertController *weakAlert = alert;   // the action belongs to the alert
     [alert addAction:wq_alert_action(@"Export", UIAlertActionStyleDefault, ^(UIAlertAction *__unused a) {
-        NSString *name = [alert.textFields.firstObject.text stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet];
+        NSString *name = [weakAlert.textFields.firstObject.text stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet];
         if (!name.length) name = WQLocalized(@"My Theme");
         if (name.length > 40) name = [name substringToIndex:40];
         NSString *dir = [NSTemporaryDirectory() stringByAppendingPathComponent:[@"WQTheme-" stringByAppendingString:NSUUID.UUID.UUIDString]];

@@ -192,6 +192,26 @@ int main(void)
         bogus.unitPath = [wq_test_backup_root stringByAppendingPathComponent:@"20261112-170700-000-1"];
         check(!wq_restore_deleted(bogus, &error) && ![fm fileExistsAtPath:[data stringByAppendingPathComponent:@"New"]] &&
               [fm fileExistsAtPath:data], @"failed restore removes the folders it created, nothing above");
+        // A SQLite database is restored with its -wal/-shm or not at all.
+        NSString *dbDir = [data stringByAppendingPathComponent:@"DbSet"];
+        check([fm createDirectoryAtPath:dbDir withIntermediateDirectories:YES attributes:nil error:nil], @"database fixture folder");
+        NSMutableData *dbBytes = [NSMutableData dataWithBytes:"SQLite format 3" length:16];
+        [dbBytes increaseLengthBy:4080];
+        NSString *dbBackup = [base stringByAppendingPathComponent:@"app.sqlite.backup"];
+        check([dbBytes writeToFile:dbBackup atomically:YES], @"database backup fixture");
+        WQDeletedItem *db = [WQDeletedItem new];
+        db.originalPath = [dbDir stringByAppendingPathComponent:@"app.sqlite"];
+        db.backupPath = dbBackup;
+        db.unitPath = [wq_test_backup_root stringByAppendingPathComponent:@"20261112-170800-000-1"];
+        NSString *liveWAL = [db.originalPath stringByAppendingString:@"-wal"];
+        check([fm createDirectoryAtPath:liveWAL withIntermediateDirectories:NO attributes:nil error:nil], @"a -wal that is not a file");
+        error = nil;
+        check(!wq_restore_deleted(db, &error) && error.length && ![fm fileExistsAtPath:db.originalPath],
+              @"a -wal that can't be reset refuses the restore before the database is put back");
+        check([fm removeItemAtPath:liveWAL error:nil], @"remove the blocking -wal");
+        put(liveWAL, @"stale pages of another database");
+        check(wq_restore_deleted(db, &error) && [[NSData dataWithContentsOfFile:db.originalPath] isEqual:dbBytes] &&
+              [NSData dataWithContentsOfFile:liveWAL].length == 0, @"a stale -wal is emptied when the database is restored");
         [fm removeItemAtPath:base error:nil];
         puts("All Recently Deleted tests passed.");
     }

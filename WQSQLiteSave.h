@@ -34,6 +34,7 @@ BOOL wq_sqlite_save(sqlite3 *copyDB, NSString *original, NSDictionary *state,
 // or else emptied, with the old bytes kept in Backups (their units are added
 // to `units`). NO with *error when a sidecar can't be handled; nothing is done
 // for files that aren't SQLite databases.
+BOOL wq_sqlite_restore_sidecars_possible(NSString *original, NSString *backup, NSString *_Nullable *_Nullable error);
 BOOL wq_sqlite_restore_sidecars(NSString *original, NSString *backup, NSMutableArray<NSString *> *_Nullable units,
                                 NSString *_Nullable *_Nullable error);
 

@@ -1150,3 +1150,4 @@
 "An interrupted restore of %@ could not be undone because its safety backup %@ no longer exists. The recovery was closed; check the app's data and restore a backup if needed." = "ไม่สามารถย้อนการกู้คืนของ %@ ที่ถูกขัดจังหวะได้ เพราะข้อมูลสำรองนิรภัย %@ ไม่มีอยู่แล้ว การกู้คืนถูกปิดแล้ว โปรดตรวจสอบข้อมูลของแอปและกู้คืนข้อมูลสำรองหากจำเป็น";
 "\n\nSymbolic links in the ZIP that were left out: %lu." = "\n\nลิงก์สัญลักษณ์ใน ZIP ที่ถูกข้าม: %lu";
 "\n\nThis data holds no %@ folder. Restoring it leaves the app's %@ as it is." = "\n\nข้อมูลนี้ไม่มีโฟลเดอร์ %@ การกู้คืนจะคง %@ ของแอปไว้ตามเดิม";
+"The connection is not encrypted: others on the same network can read the password and the files. Share only on a network you trust." = "การเชื่อมต่อไม่ได้เข้ารหัส ผู้อื่นในเครือข่ายเดียวกันสามารถอ่านรหัสผ่านและไฟล์ได้ โปรดแชร์เฉพาะในเครือข่ายที่คุณไว้ใจ";

@@ -9,6 +9,18 @@
 
 NS_ASSUME_NONNULL_BEGIN
 
+// Defines `static id name(void)`: a lock object of its own for one piece of
+// state, for @synchronized. Never lock a shared object (NSNull.null, a
+// framework class): unrelated code that does the same would then contend
+// with, or deadlock against, this state.
+#define WQ_DEFINE_LOCK(name) \
+    static id name(void) { \
+        static id lock; \
+        static dispatch_once_t once; \
+        dispatch_once(&once, ^{ lock = [NSObject new]; }); \
+        return lock; \
+    }
+
 // Main-thread edit state shared by all three editors. A successful completion
 // clears dirty only when no newer revision was made after beginSave.
 @interface WQEditState : NSObject

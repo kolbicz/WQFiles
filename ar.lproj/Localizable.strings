@@ -1146,3 +1146,4 @@
 "An interrupted restore of %@ could not be undone because its safety backup %@ no longer exists. The recovery was closed; check the app's data and restore a backup if needed." = "تعذّر التراجع عن استعادة متوقفة لـ %@ لأن نسختها الاحتياطية الآمنة %@ لم تعد موجودة. تم إغلاق الاسترداد؛ تحقق من بيانات التطبيق واستعد نسخة احتياطية عند الحاجة.";
 "\n\nSymbolic links in the ZIP that were left out: %lu." = "\n\nالروابط الرمزية في ملف ZIP التي تم استبعادها: %lu.";
 "\n\nThis data holds no %@ folder. Restoring it leaves the app's %@ as it is." = "\n\nهذه البيانات لا تحتوي على مجلد %@. استعادتها تترك %@ الخاص بالتطبيق كما هو.";
+"The connection is not encrypted: others on the same network can read the password and the files. Share only on a network you trust." = "الاتصال غير مشفّر: يمكن للآخرين على الشبكة نفسها قراءة كلمة المرور والملفات. شارك فقط على شبكة تثق بها.";

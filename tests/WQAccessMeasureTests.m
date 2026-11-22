@@ -57,6 +57,12 @@ int main(void)
         } @finally {
             [fm removeItemAtPath:base error:nil];
         }
+        // The in-memory log is bounded: the oldest lines go, whole lines only.
+        for (int i = 0; i < 2000; i++) wq_log(@"bounded log line %04d", i);
+        NSString *logText = wq_log_text();
+        check(logText.length < kWQLogMaxLength * 2 && [logText hasPrefix:@"("] && [logText containsString:@"earlier lines left out)\nbounded log line "] &&
+              [logText hasSuffix:@"bounded log line 1999\n"] && ![logText containsString:@"bounded log line 0000"],
+              @"log keeps the newest lines and says how many were left out");
         puts("All WQAccess measure regression tests passed.");
     }
     return 0;

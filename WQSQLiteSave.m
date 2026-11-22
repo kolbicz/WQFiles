@@ -209,6 +209,21 @@ static BOOL wq_sqlite_is_database_file(NSString *path)
     return yes;
 }
 
+// What wq_sqlite_restore_sidecars would refuse for sure, checked before the
+// database itself is put back: a failure after that leaves a restored
+// database beside sidecars that don't belong to it.
+BOOL wq_sqlite_restore_sidecars_possible(NSString *original, NSString *backup, NSString **error)
+{
+    if (!wq_sqlite_is_database_file(backup)) return YES;
+    for (NSString *suffix in @[@"-wal", @"-shm"]) {
+        NSString *live = wq_sqlite_side(original, suffix);
+        struct stat st;
+        if (wq_stat(live, &st) && !S_ISREG(st.st_mode))
+            return wq_sqlite_fail(error, WQLocalizedFormat(@"%@ is not a regular file, so the restored database could open with other data. Remove it and restore again.", live.lastPathComponent));
+    }
+    return YES;
+}
+
 BOOL wq_sqlite_restore_sidecars(NSString *original, NSString *backup, NSMutableArray<NSString *> *units, NSString **error)
 {
     if (!wq_sqlite_is_database_file(backup)) return YES;

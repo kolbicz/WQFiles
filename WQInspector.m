@@ -214,8 +214,16 @@ WQInspector *wq_inspector_install_zip(NSString *zipPath, NSString *folder, BOOL 
             if (hadOld) rename(old.fileSystemRepresentation, destination.fileSystemRepresentation);
             return nil;
         }
-        if (replaced) *replaced = hadOld;
         installed = wq_inspector_load(destination, &problem);
+        if (!installed) {
+            // The new folder doesn't load after all: it goes back into the
+            // stage (removed below) and the inspector from before returns.
+            NSString *failed = [stage stringByAppendingPathComponent:@"failed"];
+            if (rename(destination.fileSystemRepresentation, failed.fileSystemRepresentation) == 0 && hadOld)
+                rename(old.fileSystemRepresentation, destination.fileSystemRepresentation);
+            return nil;
+        }
+        if (replaced) *replaced = hadOld;
         return installed;
     } @finally {
         [fm removeItemAtPath:stage error:nil];
@@ -390,7 +398,15 @@ WQInspectorResult *wq_inspector_run(WQInspector *inspector, NSData *bytes, BOOL 
     static WQSetTimeLimit setTimeLimit;
     static dispatch_once_t once;
     dispatch_once(&once, ^{ setTimeLimit = (WQSetTimeLimit)dlsym(RTLD_DEFAULT, "JSContextGroupSetExecutionTimeLimit"); });
-    if (setTimeLimit) setTimeLimit(group, timeLimit, wq_inspector_terminate, NULL);
+    if (!setTimeLimit) {
+        // No way to stop a script that never returns: not run at all, rather
+        // than run without the limit the user was promised.
+        JSContextGroupRelease(group);
+        NSLog(@"[wqfiles] inspector: JavaScriptCore has no execution time limit on this iOS; scripts are not run");
+        if (error) *error = @"Inspectors can't run on this iOS version: JavaScriptCore offers no way to stop a script.";
+        return nil;
+    }
+    setTimeLimit(group, timeLimit, wq_inspector_terminate, NULL);
     JSGlobalContextRef global = JSGlobalContextCreateInGroup(group, NULL);
     JSContext *context = [JSContext contextWithJSGlobalContextRef:global];
     JSGlobalContextRelease(global);

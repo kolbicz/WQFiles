@@ -1150,3 +1150,4 @@
 "An interrupted restore of %@ could not be undone because its safety backup %@ no longer exists. The recovery was closed; check the app's data and restore a backup if needed." = "Không thể hoàn tác lần khôi phục bị gián đoạn của %@ vì bản sao lưu an toàn %@ không còn tồn tại. Quá trình phục hồi đã được đóng; hãy kiểm tra dữ liệu của ứng dụng và khôi phục một bản sao lưu nếu cần.";
 "\n\nSymbolic links in the ZIP that were left out: %lu." = "\n\nLiên kết tượng trưng trong ZIP đã bị bỏ qua: %lu.";
 "\n\nThis data holds no %@ folder. Restoring it leaves the app's %@ as it is." = "\n\nDữ liệu này không có thư mục %@. Khi khôi phục, %@ của ứng dụng được giữ nguyên.";
+"The connection is not encrypted: others on the same network can read the password and the files. Share only on a network you trust." = "Kết nối không được mã hóa: người khác trên cùng mạng có thể đọc mật khẩu và các tệp. Chỉ chia sẻ trên mạng mà bạn tin tưởng.";

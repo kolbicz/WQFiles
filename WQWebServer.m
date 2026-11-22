@@ -11,6 +11,7 @@
 //
 
 #import "WQWebServer.h"
+#import "WQWebSupport.h"
 #import "WQAccess.h"
 #import "WQArchive.h"
 #import "WQLaunchServices.h"
@@ -28,6 +29,7 @@
 #import <netinet/in.h>
 #import <sys/socket.h>
 #import <stdatomic.h>
+#import <sys/mount.h>
 #import <sys/stat.h>
 #import <unistd.h>
 
@@ -114,51 +116,8 @@ void wq_edit_sharing_password(UIViewController *host, void (^done)(void))
 
 static const NSUInteger kWQWebMaxHeader = 16384;
 static const NSUInteger kWQWebMaxConnections = 12;
+static const CFTimeInterval kWQWebHeaderSeconds = 20;
 static const size_t kWQWebChunk = 256 * 1024;
-static NSString *const kWQUploadStagePrefix = @".wq-upload-";
-
-// `base` + `suffix` (+ "." `ext`) within the 255-byte name limit, cutting
-// whole characters off the end of `base` when needed.
-NSString *WQUploadCandidate(NSString *base, NSString *ext, NSString *suffix)
-{
-    NSString *tail = ext.length ? [NSString stringWithFormat:@"%@.%@", suffix, ext] : suffix;
-    NSString *head = base;
-    while (head.length && [head stringByAppendingString:tail].UTF8String && strlen([head stringByAppendingString:tail].UTF8String) > 255) {
-        NSRange last = [head rangeOfComposedCharacterSequenceAtIndex:head.length - 1];
-        head = [head substringToIndex:last.location];
-    }
-    return [head stringByAppendingString:tail];
-}
-
-NSArray<NSString *> *WQWebPathComponents(NSString *encoded)
-{
-    NSMutableArray<NSString *> *out = [NSMutableArray new];
-    for (NSString *raw in [encoded componentsSeparatedByString:@"/"]) {
-        if (!raw.length) continue;
-        NSString *c = raw.stringByRemovingPercentEncoding;
-        if (!c.length || [c.lowercaseString hasPrefix:kWQUploadStagePrefix] || [c isEqualToString:@"."] || [c isEqualToString:@".."] ||
-            [c containsString:@"/"] || [c containsString:@"\\"] || [c rangeOfString:@"\0"].location != NSNotFound) return nil;
-        [out addObject:c];
-    }
-    return out;
-}
-
-NSString *WQWebHTMLEscape(NSString *text)
-{
-    NSMutableString *s = [NSMutableString stringWithCapacity:text.length + 8];
-    for (NSUInteger i = 0; i < text.length; i++) {
-        unichar c = [text characterAtIndex:i];
-        switch (c) {
-            case '&': [s appendString:@"&amp;"]; break;
-            case '<': [s appendString:@"&lt;"]; break;
-            case '>': [s appendString:@"&gt;"]; break;
-            case '"': [s appendString:@"&quot;"]; break;
-            case '\'': [s appendString:@"&#39;"]; break;
-            default: [s appendFormat:@"%C", c];
-        }
-    }
-    return s;
-}
 
 static NSString *WQWebEncode(NSString *component)
 {
@@ -382,7 +341,12 @@ static BOOL WQWebSend(int fd, const void *bytes, size_t length)
     NSMutableData *buffer = [NSMutableData new];
     char chunk[4096];
     NSRange end = {NSNotFound, 0};
+    // The whole header within this time: the 30 s receive timeout alone lets
+    // a client that sends a byte now and then keep one of the few
+    // connection slots for good.
+    CFAbsoluteTime headerDeadline = CFAbsoluteTimeGetCurrent() + kWQWebHeaderSeconds;
     while (end.location == NSNotFound) {
+        if (CFAbsoluteTimeGetCurrent() > headerDeadline) return;
         ssize_t n = recv(fd, chunk, sizeof chunk, 0);
         if (n < 0 && errno == EINTR) continue;
         if (n <= 0) return;
@@ -504,8 +468,16 @@ static BOOL WQWebSend(int fd, const void *bytes, size_t length)
     if (!dir || !S_ISDIR(st.st_mode)) { reply(404, WQLocalized(@"Not found.")); return; }
     NSString *lengthText = headers[@"content-length"];
     if (!lengthText.length || headers[@"transfer-encoding"]) { reply(411, @"Length Required"); return; }
-    long long length = lengthText.longLongValue;
-    if (length < 0) { reply(400, @"Bad Request"); return; }
+    // Digits only, all of them: "12abc" or "-1" is not a length.
+    unsigned long long declared = 0;
+    if (!WQWebParseUnsigned(lengthText, &declared) || declared > (unsigned long long)LLONG_MAX) { reply(400, @"Bad Request"); return; }
+    long long length = (long long)declared;
+    // An upload is written to temporary storage and then copied next to its
+    // destination: room for both, and a reserve, before a byte is read.
+    struct statfs fs;
+    BOOL spaceKnown = statfs(NSTemporaryDirectory().fileSystemRepresentation, &fs) == 0;
+    unsigned long long available = spaceKnown ? (unsigned long long)fs.f_bavail * fs.f_bsize : 0;
+    if (spaceKnown && !WQWebUploadFits(declared, available)) { reply(507, WQLocalized(@"Not enough space on this device.")); return; }
     if ([headers[@"expect"].lowercaseString isEqualToString:@"100-continue"]) {
         static const char cont[] = "HTTP/1.1 100 Continue\r\n\r\n";
         WQWebSend(fd, cont, sizeof cont - 1);
@@ -663,24 +635,17 @@ static NSString *WQWebDisposition(NSString *kind, NSString *name)
     }
     unsigned long long size = (unsigned long long)st.st_size, start = 0, last = size ? size - 1 : 0;
     BOOL partial = NO;
-    if ([range hasPrefix:@"bytes="] && ![range containsString:@","] && size > 0) {
-        NSArray<NSString *> *parts = [[range substringFromIndex:6] componentsSeparatedByString:@"-"];
-        if (parts.count == 2) {
-            NSString *a = parts[0], *b = parts[1];
-            if (a.length) {
-                start = strtoull(a.UTF8String, NULL, 10);
-                if (b.length) last = MIN(strtoull(b.UTF8String, NULL, 10), size - 1);
-            } else if (b.length) {
-                unsigned long long tail = strtoull(b.UTF8String, NULL, 10);
-                start = tail >= size ? 0 : size - tail;
-            }
-            if (start > last || start >= size) {
+    // One range, strictly parsed; anything malformed is ignored (the whole
+    // file is sent), as HTTP allows.
+    if (range && size > 0) {
+        switch (WQWebParseRange(range, size, &start, &last)) {
+            case WQWebRangeNone: start = 0; last = size - 1; break;
+            case WQWebRangeUnsatisfiable:
                 close(file);
                 [self respond:fd status:416 type:@"text/plain" body:[NSData data] head:head
                         extra:@{@"Content-Range": [NSString stringWithFormat:@"bytes */%llu", size]}];
                 return;
-            }
-            partial = YES;
+            case WQWebRangePartial: partial = YES; break;
         }
     }
     NSString *name = path.lastPathComponent;
@@ -751,7 +716,16 @@ static NSString *WQWebDisposition(NSString *kind, NSString *name)
     if (!components.count && _entries) paths = [_entries.allValues valueForKey:@"path"];
     NSString *error = nil;
     __weak typeof(self) weakSelf = self;
+    // One archive at a time: each is built in temporary storage first (up
+    // to 4 GB), so a few requests at once could fill the device.
+    static dispatch_semaphore_t oneZip;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{ oneZip = dispatch_semaphore_create(1); });
+    while (dispatch_semaphore_wait(oneZip, dispatch_time(DISPATCH_TIME_NOW, NSEC_PER_SEC / 2)) != 0) {
+        if (_stopped) { [NSFileManager.defaultManager removeItemAtPath:dir error:nil]; return; }
+    }
     BOOL ok = wq_zip_write(paths, zip, io, ^BOOL { WQWebServer *me = weakSelf; return !me || me->_stopped; }, nil, NULL, &error);
+    dispatch_semaphore_signal(oneZip);
     if (!ok) {
         [NSFileManager.defaultManager removeItemAtPath:dir error:nil];
         [self respondError:fd status:500 message:WQLocalizedFormat(@"The ZIP could not be created: %@", error ?: @"?") head:head];
@@ -1200,6 +1174,7 @@ static NSString *WQWebTone(WQWebItem *item)
         WQLocalized(@"Open the address in a browser on a computer or phone on the same Wi-Fi and sign in with the user and password. Files can be opened and downloaded. Sharing stops when you close this screen or leave WQ Files."),
         WQLocalized(wq_sharing_password() ? @"The password is the one set in Settings → Sharing Password."
                                           : @"The password changes each time; set a fixed one in Settings → Sharing Password.")];
+    text = [text stringByAppendingFormat:@"\n\n%@", WQLocalized(@"The connection is not encrypted: others on the same network can read the password and the files. Share only on a network you trust.")];
     if (_uploadable) text = [text stringByAppendingFormat:@"\n\n%@", WQLocalized(@"Allow Uploads: the browser can add files to this folder and its subfolders. Nothing is overwritten or deleted: a file whose name is taken is saved as “name 2”.")];
     return text;
 }

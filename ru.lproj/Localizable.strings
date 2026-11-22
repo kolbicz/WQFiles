@@ -1150,3 +1150,4 @@
 "An interrupted restore of %@ could not be undone because its safety backup %@ no longer exists. The recovery was closed; check the app's data and restore a backup if needed." = "Прерванное восстановление %@ не удалось отменить, так как его страховочная копия %@ больше не существует. Восстановление закрыто; проверьте данные приложения и при необходимости восстановите резервную копию.";
 "\n\nSymbolic links in the ZIP that were left out: %lu." = "\n\nПропущено символических ссылок из ZIP: %lu.";
 "\n\nThis data holds no %@ folder. Restoring it leaves the app's %@ as it is." = "\n\nВ этих данных нет папки %@. При восстановлении папка %@ приложения останется как есть.";
+"The connection is not encrypted: others on the same network can read the password and the files. Share only on a network you trust." = "Соединение не шифруется: другие в той же сети могут прочитать пароль и файлы. Делитесь только в сети, которой доверяете.";

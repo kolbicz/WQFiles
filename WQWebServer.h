@@ -55,11 +55,7 @@ BOOL wq_set_sharing_password(NSString *_Nullable password);
 // Alert to set, change or remove it; done runs after a change.
 void wq_edit_sharing_password(UIViewController *host, void (^_Nullable done)(void));
 
-// Exposed for tests: maps a URL path below a route ("Documents/a%20b.txt")
-// to path components, or nil when it would leave the folder.
-NSArray<NSString *> *_Nullable WQWebPathComponents(NSString *encoded);
-// A non-overwriting upload name: base + suffix (+ .ext), at most 255 bytes.
-NSString *WQUploadCandidate(NSString *base, NSString *ext, NSString *suffix);
-NSString *WQWebHTMLEscape(NSString *text);
+// The Foundation-only helpers (paths, names, escaping, number parsing) are
+// in WQWebSupport.h, where the host tests run them.
 
 NS_ASSUME_NONNULL_END

@@ -1150,3 +1150,4 @@
 "An interrupted restore of %@ could not be undone because its safety backup %@ no longer exists. The recovery was closed; check the app's data and restore a backup if needed." = "No se pudo deshacer una restauración interrumpida de %@ porque su copia de seguridad previa %@ ya no existe. La recuperación se cerró; revisa los datos de la app y restaura una copia de seguridad si hace falta.";
 "\n\nSymbolic links in the ZIP that were left out: %lu." = "\n\nEnlaces simbólicos del ZIP que se omitieron: %lu.";
 "\n\nThis data holds no %@ folder. Restoring it leaves the app's %@ as it is." = "\n\nEstos datos no contienen la carpeta %@. Al restaurarlos, %@ de la app queda como está.";
+"The connection is not encrypted: others on the same network can read the password and the files. Share only on a network you trust." = "La conexión no está cifrada: otras personas en la misma red pueden leer la contraseña y los archivos. Comparte solo en una red de confianza.";

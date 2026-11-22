@@ -5398,6 +5398,43 @@ static UIView *WQPrismSectionHeaderView(NSString *title, NSString *detail)
 
 // Set once the startup check ran (in either design), so switching designs
 // doesn't run it again or reopen the last folder.
+// Check for Updates, for both start screens: at most every 12 hours, one
+// request for the public source.json on GitHub (no data about the device is
+// sent). `show` runs on the main thread with a version newer than this one:
+// at once for one found earlier, and again when the request finds one.
+static void wq_check_for_update(void (^show)(NSString *version))
+{
+    NSUserDefaults *defaults = NSUserDefaults.standardUserDefaults;
+    if ([defaults boolForKey:kWQUpdateCheckOffPref]) return;
+    NSDate *last = [defaults objectForKey:kWQUpdateCheckedPref];
+    NSString *known = [defaults stringForKey:@"WQUpdateAvailable"];
+    NSString *mine = NSBundle.mainBundle.infoDictionary[@"CFBundleShortVersionString"] ?: @"0";
+    if (WQVersionIsNewer(known, mine)) show(known);
+    if ([last isKindOfClass:NSDate.class] && -last.timeIntervalSinceNow < 12 * 3600) return;
+    NSURLSessionConfiguration *config = NSURLSessionConfiguration.ephemeralSessionConfiguration;
+    config.timeoutIntervalForRequest = 15;
+    config.HTTPCookieStorage = nil;
+    NSURL *url = [NSURL URLWithString:@"https://raw.githubusercontent.com/kolbicz/WQFiles/main/source.json"];
+    NSURLSession *session = [NSURLSession sessionWithConfiguration:config];
+    [[session dataTaskWithURL:url completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
+        NSInteger status = [response isKindOfClass:NSHTTPURLResponse.class] ? ((NSHTTPURLResponse *)response).statusCode : 0;
+        if (error || status != 200 || data.length > 1024 * 1024) {
+            wq_log(@"update check: failed (%@)", error.localizedDescription ?: [NSString stringWithFormat:@"HTTP %ld", (long)status]);
+            return;
+        }
+        NSString *version = WQUpdateVersionInSource(data);
+        if (!version) return;
+        dispatch_async(dispatch_get_main_queue(), ^{
+            [defaults setObject:NSDate.date forKey:kWQUpdateCheckedPref];
+            [defaults setObject:version forKey:@"WQUpdateAvailable"];
+            BOOL newer = WQVersionIsNewer(version, mine);
+            wq_log(@"update check: latest %@, this is %@%@", version, mine, newer ? @" (update available)" : @"");
+            if (newer) show(version);
+        });
+    }] resume];
+    [session finishTasksAndInvalidate];   // or the session lives until the app quits
+}
+
 static BOOL wq_startup_checked;
 // The last access check failed. A start screen built later (New Design
 // switched) didn't run the check itself and must not show "passed".
@@ -6286,37 +6323,8 @@ static void wq_apply_design(void);
 
 - (void)checkForUpdate
 {
-    NSUserDefaults *defaults = NSUserDefaults.standardUserDefaults;
-    if ([defaults boolForKey:kWQUpdateCheckOffPref]) return;
-    NSDate *last = [defaults objectForKey:kWQUpdateCheckedPref];
-    NSString *known = [defaults stringForKey:@"WQUpdateAvailable"];
-    NSString *mine = NSBundle.mainBundle.infoDictionary[@"CFBundleShortVersionString"] ?: @"0";
-    if (known.length && [known compare:mine options:NSNumericSearch] == NSOrderedDescending) [self showUpdateBanner:known];
-    if ([last isKindOfClass:NSDate.class] && -last.timeIntervalSinceNow < 12 * 3600) return;
-    NSURLSessionConfiguration *config = [NSURLSessionConfiguration ephemeralSessionConfiguration];
-    config.timeoutIntervalForRequest = 15;
-    config.HTTPCookieStorage = nil;
-    NSURL *url = [NSURL URLWithString:@"https://raw.githubusercontent.com/kolbicz/WQFiles/main/source.json"];
     __weak typeof(self) weakSelf = self;
-    [[[NSURLSession sessionWithConfiguration:config] dataTaskWithURL:url completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
-        NSInteger status = [response isKindOfClass:NSHTTPURLResponse.class] ? ((NSHTTPURLResponse *)response).statusCode : 0;
-        if (error || status != 200 || data.length > 1024 * 1024) {
-            wq_log(@"update check: failed (%@)", error.localizedDescription ?: [NSString stringWithFormat:@"HTTP %ld", (long)status]);
-            return;
-        }
-        id json = [NSJSONSerialization JSONObjectWithData:data options:0 error:nil];
-        id apps = [json isKindOfClass:NSDictionary.class] ? json[@"apps"] : nil;
-        id app = [apps isKindOfClass:NSArray.class] && [apps count] ? [apps firstObject] : nil;
-        id version = [app isKindOfClass:NSDictionary.class] ? app[@"version"] : nil;
-        if (![version isKindOfClass:NSString.class] || [version length] > 20) return;
-        dispatch_async(dispatch_get_main_queue(), ^{
-            [defaults setObject:NSDate.date forKey:kWQUpdateCheckedPref];
-            [defaults setObject:version forKey:@"WQUpdateAvailable"];
-            BOOL newer = [version compare:mine options:NSNumericSearch] == NSOrderedDescending;
-            wq_log(@"update check: latest %@, this is %@%@", version, mine, newer ? @" (update available)" : @"");
-            if (newer) [weakSelf showUpdateBanner:version];
-        });
-    }] resume];
+    wq_check_for_update(^(NSString *version) { [weakSelf showUpdateBanner:version]; });
 }
 
 - (void)showUpdateBanner:(NSString *)version
@@ -6879,37 +6887,8 @@ static NSString *const kWQTroubleshootingFooter =
 // shows a banner at the top of the start screen.
 - (void)checkForUpdate
 {
-    NSUserDefaults *defaults = NSUserDefaults.standardUserDefaults;
-    if ([defaults boolForKey:kWQUpdateCheckOffPref]) return;
-    NSDate *last = [defaults objectForKey:kWQUpdateCheckedPref];
-    NSString *known = [defaults stringForKey:@"WQUpdateAvailable"];
-    NSString *mine = NSBundle.mainBundle.infoDictionary[@"CFBundleShortVersionString"] ?: @"0";
-    if (known.length && [known compare:mine options:NSNumericSearch] == NSOrderedDescending) [self showUpdateBanner:known];
-    if ([last isKindOfClass:NSDate.class] && -last.timeIntervalSinceNow < 12 * 3600) return;
-    NSURLSessionConfiguration *config = NSURLSessionConfiguration.ephemeralSessionConfiguration;
-    config.timeoutIntervalForRequest = 15;
-    config.HTTPCookieStorage = nil;
-    NSURL *url = [NSURL URLWithString:@"https://raw.githubusercontent.com/kolbicz/WQFiles/main/source.json"];
     __weak typeof(self) weakSelf = self;
-    [[[NSURLSession sessionWithConfiguration:config] dataTaskWithURL:url completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
-        NSInteger status = [response isKindOfClass:NSHTTPURLResponse.class] ? ((NSHTTPURLResponse *)response).statusCode : 0;
-        if (error || status != 200 || data.length > 1024 * 1024) {
-            wq_log(@"update check: failed (%@)", error.localizedDescription ?: [NSString stringWithFormat:@"HTTP %ld", (long)status]);
-            return;
-        }
-        id json = [NSJSONSerialization JSONObjectWithData:data options:0 error:nil];
-        id apps = [json isKindOfClass:NSDictionary.class] ? json[@"apps"] : nil;
-        id app = [apps isKindOfClass:NSArray.class] && [apps count] ? [apps firstObject] : nil;
-        id version = [app isKindOfClass:NSDictionary.class] ? app[@"version"] : nil;
-        if (![version isKindOfClass:NSString.class] || [version length] > 20) return;
-        dispatch_async(dispatch_get_main_queue(), ^{
-            [defaults setObject:NSDate.date forKey:kWQUpdateCheckedPref];
-            [defaults setObject:version forKey:@"WQUpdateAvailable"];
-            BOOL newer = [version compare:mine options:NSNumericSearch] == NSOrderedDescending;
-            wq_log(@"update check: latest %@, this is %@%@", version, mine, newer ? @" (update available)" : @"");
-            if (newer) [weakSelf showUpdateBanner:version];
-        });
-    }] resume];
+    wq_check_for_update(^(NSString *version) { [weakSelf showUpdateBanner:version]; });
 }
 
 - (void)showUpdateBanner:(NSString *)version

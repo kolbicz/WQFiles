@@ -31,6 +31,12 @@
 #import <unistd.h>
 #import <xpc/xpc.h>
 
+WQ_DEFINE_LOCK(wq_group_roots_lock)
+WQ_DEFINE_LOCK(wq_recovery_log_lock)
+WQ_DEFINE_LOCK(wq_api_labels_lock)
+WQ_DEFINE_LOCK(wq_full_scan_stop_lock)
+WQ_DEFINE_LOCK(wq_label_report_lock)
+
 @implementation WQScanCancellation {
     _Atomic BOOL _cancelled;
 }
@@ -76,6 +82,12 @@ BOOL wq_scan_wait(WQScanCancellation *cancellation)
 
 static NSMutableString *gLog;
 static NSLock *gLogLock;
+static NSUInteger gLogDropped;   // lines removed from the start, under gLogLock
+#ifdef WQ_ACCESS_TESTING
+static const NSUInteger kWQLogMaxLength = 4096;
+#else
+static const NSUInteger kWQLogMaxLength = 1024 * 1024;
+#endif
 
 void wq_log(NSString *format, ...)
 {
@@ -91,6 +103,14 @@ void wq_log(NSString *format, ...)
     NSLog(@"[wqfiles] %@", line);
     [gLogLock lock];
     [gLog appendFormat:@"%@\n", line];
+    // Bounded: a long session (or a loop of handled errors) must not grow
+    // the log without end. The oldest lines go, whole lines only.
+    if (gLog.length > kWQLogMaxLength + kWQLogMaxLength / 4) {
+        NSRange cut = [gLog rangeOfString:@"\n" options:0 range:NSMakeRange(gLog.length - kWQLogMaxLength, kWQLogMaxLength)];
+        NSUInteger end = cut.location == NSNotFound ? gLog.length - kWQLogMaxLength : NSMaxRange(cut);
+        gLogDropped += [[gLog substringToIndex:end] componentsSeparatedByString:@"\n"].count - 1;
+        [gLog deleteCharactersInRange:NSMakeRange(0, end)];
+    }
     [gLogLock unlock];
     errno = savedErrno;
 }
@@ -99,8 +119,9 @@ NSString *wq_log_text(void)
 {
     [gLogLock lock];
     NSString *text = [gLog copy] ?: @"";
+    NSUInteger dropped = gLogDropped;
     [gLogLock unlock];
-    return text;
+    return dropped ? [NSString stringWithFormat:@"(%lu earlier lines left out)\n%@", (unsigned long)dropped, text] : text;
 }
 
 static NSString *wq_errno(int err) { return [NSString stringWithFormat:@"%s (errno %d)", strerror(err), err]; }
@@ -168,7 +189,7 @@ static NSString *wq_group_root(NSString *group)
 {
     if (!group) return nil;
     static NSMutableDictionary<NSString *, NSString *> *roots;
-    @synchronized (NSFileManager.class) {
+    @synchronized (wq_group_roots_lock()) {
         if (roots[group]) return roots[group];
     }
     NSString *path = [NSFileManager.defaultManager containerURLForSecurityApplicationGroupIdentifier:group].path;
@@ -206,7 +227,7 @@ static NSString *wq_group_root(NSString *group)
         }
     }
     if (!root) return nil;
-    @synchronized (NSFileManager.class) {
+    @synchronized (wq_group_roots_lock()) {
         if (!roots) roots = [NSMutableDictionary new];
         roots[group] = root;
     }
@@ -386,7 +407,7 @@ static void wq_log_recovery_failure(NSString *libraryPath, int error, NSString *
     static NSString *last;
     static NSUInteger repeats;
     NSString *line = [NSString stringWithFormat:@"%@ (%@; %@)", libraryPath, wq_errno(error), state];
-    @synchronized (NSFileManager.class) {
+    @synchronized (wq_recovery_log_lock()) {
         if (last && [line isEqualToString:last]) {
             repeats++;
             if (repeats % 25 == 0) wq_log(@"token cache recovery still failing (%lu more times)", (unsigned long)repeats);
@@ -2704,7 +2725,7 @@ static BOOL wq_label_identity_matches(NSMutableDictionary<NSString *, NSArray<NS
 
 static void wq_label_caches_invalidate(void)
 {
-    @synchronized (NSNull.null) { gLSAPILabels = nil; gLSAPIIdentities = nil; }
+    @synchronized (wq_api_labels_lock()) { gLSAPILabels = nil; gLSAPIIdentities = nil; }
     atomic_fetch_add(&gWQLabelGeneration, 1);
 }
 
@@ -2754,7 +2775,7 @@ static NSDictionary<NSString *, NSArray<NSString *> *> *wq_lsapi_list_containers
         NSArray<NSNumber *> *identity = nil;
         if (wq_label_identity(path, &identity) == WQLabelIdentityKnown) identities[path] = identity;
     }
-    @synchronized (NSNull.null) { gLSAPILabels = [labels copy]; gLSAPIIdentities = identities; }
+    @synchronized (wq_api_labels_lock()) { gLSAPILabels = [labels copy]; gLSAPIIdentities = identities; }
     return result;
 }
 
@@ -2872,7 +2893,7 @@ void wq_set_full_scan_ui(BOOL (*confirm)(NSString *what, int64_t ids, double sec
 
 void wq_full_scan_stop(void)
 {
-    @synchronized (NSNull.null) { [gFullScanStop cancel]; }
+    @synchronized (wq_full_scan_stop_lock()) { [gFullScanStop cancel]; }
 }
 
 BOOL wq_full_scan_was_declined(void)
@@ -2933,13 +2954,13 @@ static WQScanCancellation *wq_full_scan_begin(NSString *what, int64_t ids, doubl
     }
     atomic_store(&gFullScanDeclined, NO);
     WQScanCancellation *stop = [WQScanCancellation new];
-    @synchronized (NSNull.null) { gFullScanStop = stop; }
+    @synchronized (wq_full_scan_stop_lock()) { gFullScanStop = stop; }
     return stop;
 }
 
 static void wq_full_scan_end(WQScanCancellation *stop)
 {
-    @synchronized (NSNull.null) { if (gFullScanStop == stop) gFullScanStop = nil; }
+    @synchronized (wq_full_scan_stop_lock()) { if (gFullScanStop == stop) gFullScanStop = nil; }
     // The window's completion is queued before the next scan can ask.
     if (gFullScanProgress) gFullScanProgress(0, 0, YES);
     if (stop.isCancelled) wq_log(@"scan: full scan stopped");
@@ -4074,7 +4095,7 @@ NSString *wq_container_label(NSString *dir)
     NSArray<NSNumber *> *identity = nil;
     WQLabelIdentity state = wq_label_identity(dir, &identity);
     NSString *fromAPI = nil;
-    @synchronized (NSNull.null) {
+    @synchronized (wq_api_labels_lock()) {
         NSString *key = wq_norm(dir);
         fromAPI = gLSAPILabels[key];
         if (fromAPI.length && gLSAPIIdentities && !wq_label_identity_matches(gLSAPIIdentities, key, state, identity)) {
@@ -4112,7 +4133,7 @@ NSString *wq_container_label(NSString *dir)
         if (fromGroups.length && ![fromGroups isEqualToString:fromPlist]) {
             static NSMutableSet<NSString *> *reported;
             BOOL first = NO;
-            @synchronized (NSNull.null) {
+            @synchronized (wq_label_report_lock()) {
                 if (!reported) reported = [NSMutableSet new];
                 first = ![reported containsObject:dir];
                 [reported addObject:dir];

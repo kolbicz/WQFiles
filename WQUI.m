@@ -13,6 +13,9 @@
 #import <fcntl.h>
 #import <sys/sysctl.h>
 #import <sys/utsname.h>
+#import "WQCore.h"
+
+WQ_DEFINE_LOCK(wq_icon_notes_lock)
 
 // "iPhone 17 Pro Max (iPhone18,2)\niOS 27.0.1 (24A446)"
 NSString *wq_device_line(void)
@@ -170,7 +173,7 @@ static UIImage *wq_real_icon(NSString *bundleID)
 static void wq_icon_note(NSString *bundleID, NSString *what)
 {
     static NSUInteger notes;
-    @synchronized (NSNull.null) {
+    @synchronized (wq_icon_notes_lock()) {
         if (notes >= 8) return;
         notes++;
     }
