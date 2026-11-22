@@ -191,9 +191,12 @@ static BOOL wq_sqlite_bind_typed(sqlite3_stmt *stmt, int index, NSString *text, 
     scanner.locale = [NSLocale localeWithLocaleIdentifier:@"en_US_POSIX"];
     long long i = 0;
     double d = 0;
-    if (previousType == SQLITE_INTEGER && [scanner scanLongLong:&i] && scanner.isAtEnd) { sqlite3_bind_int64(stmt, index, i); return YES; }
+    // NSScanner clamps an out-of-range integer to LLONG_MAX and says YES:
+    // such a value goes on as a real, as SQLite itself reads the literal.
+    BOOL integer = wq_sqlite_exact_integer(t, &i);
+    if (previousType == SQLITE_INTEGER && integer) { sqlite3_bind_int64(stmt, index, i); return YES; }
     scanner.scanLocation = 0;
-    if ((previousType == SQLITE_FLOAT || previousType == SQLITE_INTEGER) && [scanner scanDouble:&d] && scanner.isAtEnd) {
+    if ((previousType == SQLITE_FLOAT || previousType == SQLITE_INTEGER) && [scanner scanDouble:&d] && scanner.isAtEnd && isfinite(d)) {
         sqlite3_bind_double(stmt, index, d);
         return YES;
     }
@@ -615,6 +618,10 @@ static BOOL wq_sqlite_bind_typed(sqlite3_stmt *stmt, int index, NSString *text, 
     detail.onChange = ^(NSNumber *oldRowid, NSNumber *newRowid, NSArray<NSString *> *values, NSArray<NSNumber *> *types) {
         typeof(self) strongSelf = weakSelf;
         if (!strongSelf) return;
+        // A changed rowid moves the row in the table's order: patching it in
+        // place would make the next page skip one row and repeat this one.
+        // The stale generation makes the list load again when it reappears.
+        if (![oldRowid isEqualToNumber:newRowid]) return;
         NSUInteger at = [strongSelf->_rowids indexOfObject:oldRowid];
         if (at == NSNotFound) return;
         strongSelf->_rowids[at] = newRowid;
@@ -817,6 +824,10 @@ static int wq_sqlite_edit_authorizer(void *__unused context, int action, const c
                 returnsRows = sqlite3_column_count(stmt) > 0;
             }
             sqlite3_finalize(stmt);
+            // After a write, a later statement may only compile once the
+            // earlier ones ran (CREATE TABLE t; INSERT INTO t …): leave its
+            // errors to the run inside the savepoint.
+            if (rc != SQLITE_OK && writes) break;
             if (rc != SQLITE_OK) { error = @(sqlite3_errmsg(db)); break; }
             cursor = tail;
         }

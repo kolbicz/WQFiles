@@ -136,6 +136,13 @@ static void TestDateRoundTrips(void)
 static void TestIntegerParsing(void)
 {
     WQCheck([WQPParseInteger(@"42") isEqualToNumber:@42]);
+    WQCheck([WQPParseReal(@"1.5") isEqualToNumber:@1.5]);
+    WQCheck([WQPParseReal(@"1,5") isEqualToNumber:@1.5]);
+    WQCheck([WQPParseReal(@" -2.25e3 ") isEqualToNumber:@(-2250.0)]);
+    WQCheck(WQPParseReal(@"1e999") == nil);
+    WQCheck(WQPParseReal(@"1,2,3") == nil);
+    WQCheck(WQPParseReal(@"1.5x") == nil);
+    WQCheck(WQPParseReal(@"") == nil);
     WQCheck([WQPParseInteger(@" -7 ") isEqualToNumber:@(-7)]);
     WQCheck([WQPParseInteger(@"+5") isEqualToNumber:@5]);
     WQCheck([WQPParseInteger(@"9223372036854775807") isEqualToNumber:@(LLONG_MAX)]);

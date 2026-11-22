@@ -52,6 +52,12 @@ int main(void)
         for (size_t i = 0; i < sizeof reals / sizeof reals[0]; i++)
             check(strtod(wq_sqlite_real_text(reals[i]).UTF8String, NULL) == reals[i], @"REAL text round-trips");
         check([wq_sqlite_real_text(0.1) isEqualToString:@"0.1"], @"short REAL text stays short");
+        long long exact = 0;
+        check(wq_sqlite_exact_integer(@"9223372036854775807", &exact) && exact == LLONG_MAX, @"largest integer is exact");
+        check(wq_sqlite_exact_integer(@"-9223372036854775808", &exact) && exact == LLONG_MIN, @"smallest integer is exact");
+        check(!wq_sqlite_exact_integer(@"9223372036854775808", &exact), @"an integer out of range is not clamped");
+        check(!wq_sqlite_exact_integer(@"12x", &exact) && !wq_sqlite_exact_integer(@"", &exact) && !wq_sqlite_exact_integer(@"-", &exact) &&
+              !wq_sqlite_exact_integer(@"1.0", &exact), @"only whole numbers");
         NSFileManager *fm = NSFileManager.defaultManager;
         NSString *base = [NSTemporaryDirectory() stringByAppendingPathComponent:
                           [@"WQSQLiteSupportTests-" stringByAppendingString:NSUUID.UUID.UUIDString]];

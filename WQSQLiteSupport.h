@@ -43,6 +43,23 @@ static inline NSString *_Nullable wq_sqlite_exact_text(const unsigned char *_Nul
     return s;
 }
 
+// A whole number in text (optional sign, ASCII digits) that fits a 64-bit
+// integer exactly. NO for anything else, including values out of range.
+static inline BOOL wq_sqlite_exact_integer(NSString *text, long long *value)
+{
+    const char *c = text.UTF8String;
+    if (!c || !*c) return NO;
+    const char *digits = (*c == '-' || *c == '+') ? c + 1 : c;
+    if (!*digits) return NO;
+    for (const char *p = digits; *p; p++) if (*p < '0' || *p > '9') return NO;
+    errno = 0;
+    char *end = NULL;
+    long long parsed = strtoll(c, &end, 10);
+    if (errno == ERANGE || !end || *end) return NO;
+    if (value) *value = parsed;
+    return YES;
+}
+
 // A REAL as text that reads back to the same double (review DR-29): 15
 // digits when they round-trip (0.1 stays "0.1"), else the 17 that always do.
 static inline NSString *wq_sqlite_real_text(double value)

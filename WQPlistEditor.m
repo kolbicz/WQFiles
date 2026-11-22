@@ -584,11 +584,13 @@ static void wqp_alert(UIViewController *host, NSString *title, NSString *message
         f.autocorrectionType = UITextAutocorrectionTypeNo;
         f.clearButtonMode = UITextFieldViewModeAlways;
         if (t == WQPTypeInteger) f.keyboardType = UIKeyboardTypeNumbersAndPunctuation;
-        if (t == WQPTypeReal) f.keyboardType = UIKeyboardTypeDecimalPad;
+        // Not the decimal pad: it has no minus and no "e".
+        if (t == WQPTypeReal) f.keyboardType = UIKeyboardTypeNumbersAndPunctuation;
     }];
     [a addAction:wq_alert_action(@"Cancel", UIAlertActionStyleCancel, nil)];
+    __weak UIAlertController *weakAlert = a;   // the action belongs to the alert
     [a addAction:wq_alert_action(@"Set", UIAlertActionStyleDefault, ^(UIAlertAction *__unused x) {
-        NSString *text = a.textFields.firstObject.text ?: @"";
+        NSString *text = weakAlert.textFields.firstObject.text ?: @"";
         id value = nil;
         if (t != WQPTypeData && !WQPStringInputWithinLimit(text)) {
             wqp_alert(self, @"Value too large", @"Scalar values are limited to 64 KB in this editor.");
@@ -604,12 +606,7 @@ static void wqp_alert(UIViewController *host, NSString *title, NSString *message
         switch (t) {
             case WQPTypeString: value = text; break;
             case WQPTypeInteger: value = WQPParseInteger(text); break;   // rejects overflow, keeps unsigned 64-bit
-            case WQPTypeReal: {
-                NSScanner *sc = [NSScanner scannerWithString:text];
-                double d;
-                if ([sc scanDouble:&d] && sc.isAtEnd) value = @(d);
-                break;
-            }
+            case WQPTypeReal: value = WQPParseReal(text); break;   // accepts "1,5"; rejects 1e999
             case WQPTypeDate: value = WQPParseDate(text); break;
             case WQPTypeData: {
                 NSData *data = WQParseHex(text, YES);

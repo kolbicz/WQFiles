@@ -167,6 +167,22 @@ static inline NSDate *_Nullable WQPParseDate(NSString *text)
     return [WQPDateFormatter(NO) dateFromString:trimmed] ?: [WQPDateFormatter(YES) dateFromString:trimmed];
 }
 
+// Reals: "." or, as typed in many regions, "," as the decimal separator;
+// sign and exponent allowed. Not finite (1e999) or anything else: nil.
+static inline NSNumber *_Nullable WQPParseReal(NSString *text)
+{
+    NSString *t = [text stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet];
+    if (!t.length || t.length > 64) return nil;
+    if (![t containsString:@"."] && [t componentsSeparatedByString:@","].count == 2)
+        t = [t stringByReplacingOccurrencesOfString:@"," withString:@"."];
+    NSScanner *scanner = [NSScanner scannerWithString:t];
+    scanner.locale = [NSLocale localeWithLocaleIdentifier:@"en_US_POSIX"];
+    scanner.charactersToBeSkipped = nil;
+    double d = 0;
+    if (![scanner scanDouble:&d] || !scanner.isAtEnd || !isfinite(d)) return nil;
+    return @(d);
+}
+
 // Whole numbers: optional sign and ASCII digits only. Values from LLONG_MIN
 // through ULLONG_MAX are accepted exactly (above LLONG_MAX as an unsigned
 // 64-bit NSNumber); anything outside is rejected instead of being clamped.

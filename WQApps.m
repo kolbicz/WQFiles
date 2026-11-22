@@ -1614,6 +1614,24 @@ static BOOL wq_write_restore_journal(NSDictionary *journal, NSString **error)
 
 static BOOL wq_remove_restore_journal(NSString **error);
 
+// Whether an earlier restore's journal refuses a new restore. Asked before
+// the safety backup is made, so a refusal costs no full copy of the app.
+static BOOL wq_restore_journal_refuses(NSString **error)
+{
+    BOOL exists = NO;
+    NSMutableDictionary *existing = nil;
+    NSString *readError = nil;
+    if (!wq_read_restore_journal(&existing, &exists, &readError)) {
+        if (error) *error = readError;
+        return YES;
+    }
+    if (!exists) return NO;
+    NSString *policyError = nil;
+    if (WQAppsSupportJournalAllowsNewRestore(WQAppsSupportJournalStateForDictionary(existing), &policyError)) return NO;
+    if (error) *error = policyError ? WQLocalized(policyError) : nil;
+    return YES;
+}
+
 static BOOL wq_begin_restore_journal(WQAppItem *app, NSString *backup, NSString *safety, NSString **error)
 {
     if (!wq_backup_root_child(backup, app.bundleID) || !wq_backup_root_child(safety, app.bundleID)) {
@@ -1910,6 +1928,11 @@ NSString *wq_recover_interrupted_restore(void)
         *message = WQLocalizedFormat(@"The selected app container is no longer safe to use (%@). Nothing was changed.", error);
         return;
     }
+    if (wq_restore_journal_refuses(&error)) {
+        *title = WQLocalized(@"Not restored");
+        *message = WQLocalizedFormat(@"The backup is not safe to restore (%@). Nothing was changed.", error ?: WQLocalized(@"see Log"));
+        return;
+    }
     // 2. Keep the current data and a durable recovery journal before touching
     // anything, so both ordinary failures and process termination are covered.
     NSString *safety = wq_make_app_backup(app.bundleID, app.container, app.containerDevice,
@@ -1936,6 +1959,12 @@ NSString *wq_recover_interrupted_restore(void)
         !wq_validate_container(app.container, app.bundleID, app.containerDevice, app.containerInode, &error) ||
         !wq_begin_restore_journal(app, backup, safety, &error)) {
         [fm removeItemAtPath:staging error:nil];
+        // Nothing was touched, so the copy just made is the same as the live
+        // data: it is not left behind as a "Before restore" backup.
+        NSString *unusedError = nil;
+        if (!wq_delete_backup(safety, &unusedError))
+            wq_log(@"restore %@: couldn't remove the unused before-restore backup %@ (%@)", app.bundleID,
+                   safety.lastPathComponent, unusedError);
         *title = WQLocalized(@"Not restored");
         *message = WQLocalizedFormat(@"The backup is not safe to restore (%@). Nothing was changed.",
                                      error ?: stageError.localizedDescription ?: WQLocalized(@"The selected backup changed before restore"));

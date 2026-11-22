@@ -8,6 +8,7 @@
 //  This app is GPL-3.0-or-later as well (see LICENSE).
 //
 
+#import <ImageIO/ImageIO.h>
 #import <UIKit/UIKit.h>
 #import <UniformTypeIdentifiers/UniformTypeIdentifiers.h>
 #import <sys/sysctl.h>
@@ -347,6 +348,32 @@ static UIColor *wq_syntax_color(WQSyntaxKind kind)
     [self load];
 }
 
+static const off_t kImageReadLimit = 192 * 1024 * 1024;
+
+// nil unless `head` starts a picture format ImageIO knows and the whole file,
+// still at `version`, decodes. At most 4096 pixels on the long side.
+static UIImage *wq_downsampled_image(NSString *path, NSData *head, NSDictionary *version)
+{
+    CGImageSourceRef probe = CGImageSourceCreateWithData((__bridge CFDataRef)head, NULL);
+    BOOL picture = probe && CGImageSourceGetType(probe) != NULL;
+    if (probe) CFRelease(probe);
+    if (!picture) return nil;
+    NSData *all = wq_read(path, (NSUInteger)kImageReadLimit + 1, NULL);
+    NSDictionary *after = wq_file_version(path);
+    if (!all || all.length > (NSUInteger)kImageReadLimit || !after || ![after isEqualToDictionary:version]) return nil;
+    CGImageSourceRef source = CGImageSourceCreateWithData((__bridge CFDataRef)all, NULL);
+    if (!source) return nil;
+    NSDictionary *options = @{ (id)kCGImageSourceCreateThumbnailFromImageAlways: @YES,
+                               (id)kCGImageSourceCreateThumbnailWithTransform: @YES,
+                               (id)kCGImageSourceThumbnailMaxPixelSize: @4096 };
+    CGImageRef scaled = CGImageSourceCreateThumbnailAtIndex(source, 0, (__bridge CFDictionaryRef)options);
+    CFRelease(source);
+    if (!scaled) return nil;
+    UIImage *image = [UIImage imageWithCGImage:scaled];
+    CGImageRelease(scaled);
+    return image;
+}
+
 - (void)load
 {
     NSString *path = _path;
@@ -381,7 +408,17 @@ static UIColor *wq_syntax_color(WQSyntaxKind kind)
                     }
                 }
             }
-            if (!display.plistText) {
+            // A picture larger than the view limit: the first 4 MB alone decode
+            // to a cut-off picture (or to nothing). Read all of it and scale
+            // it down while decoding.
+            if (display.truncated && exists && st.st_size <= kImageReadLimit) {
+                UIImage *whole = wq_downsampled_image(path, view, version);
+                if (whole) {
+                    display.image = whole;
+                    display.truncated = NO;
+                }
+            }
+            if (!display.plistText && !display.image) {
                 display.image = [UIImage imageWithData:view];
                 if (!display.image) {
                     NSString *text = [[NSString alloc] initWithData:view encoding:NSUTF8StringEncoding];
@@ -2160,7 +2197,14 @@ static void wq_open_custom_inspector(UIViewController *host, NSString *path, UIV
     NSMutableArray *titles = [NSMutableArray new];
     NSMutableDictionary *rows = [NSMutableDictionary new];
     if (wq_sort_key() == WQSortName && _items.count >= 25) {
+        // Folders on Top makes two alphabetical runs. One index over both
+        // would list the letters out of order, so it covers the longer run.
+        NSUInteger folders = 0;
+        for (WQItem *item in _items) if (item.isDir) folders++;
+        BOOL mixed = wq_folders_first() && folders && folders < _items.count;
+        BOOL indexFolders = folders * 2 >= _items.count;
         [_items enumerateObjectsUsingBlock:^(WQItem *item, NSUInteger row, BOOL *__unused stop) {
+            if (mixed && item.isDir != indexFolders) return;
             NSString *letter = wq_index_letter(item.label ?: item.name);
             if (!rows[letter]) { rows[letter] = @(row); [titles addObject:letter]; }
         }];
@@ -3234,7 +3278,12 @@ static NSString *wq_sqlite_set_key(NSString *path)
         if (indexPath.section != 0 || (NSUInteger)indexPath.row >= _items.count) return;
         WQItem *selected = _items[(NSUInteger)indexPath.row];
         if (!wq_backup_unit_deletable(selected.path)) return;
-        [_selectedBackups addObject:selected.path];
+        // Toggled here, as for files: reloading rows (and Select All) drops
+        // the table's own selection, so a second tap never arrived as a
+        // deselect and a checked backup could not be unchecked.
+        [tableView deselectRowAtIndexPath:indexPath animated:NO];
+        if ([_selectedBackups containsObject:selected.path]) [_selectedBackups removeObject:selected.path];
+        else [_selectedBackups addObject:selected.path];
         [tableView reloadRowsAtIndexPaths:@[indexPath] withRowAnimation:UITableViewRowAnimationNone];
         [self updateBackupSelectionBar];
         return;
@@ -5341,6 +5390,9 @@ static UIView *WQPrismSectionHeaderView(NSString *title, NSString *detail)
 // Set once the startup check ran (in either design), so switching designs
 // doesn't run it again or reopen the last folder.
 static BOOL wq_startup_checked;
+// The last access check failed. A start screen built later (New Design
+// switched) didn't run the check itself and must not show "passed".
+static BOOL gHealthFailed;
 static void wq_apply_design(void);
 
 @interface WQPrismHomeViewController : UIViewController
@@ -5369,6 +5421,7 @@ static void wq_apply_design(void);
     NSString *_appGroupName;
     BOOL _checkingAccess;
     NSArray<WQHealthCheck *> *_pendingHealthFailure;
+    BOOL _sawStartup;
     BOOL _healthRetryScheduled;
     NSDictionary *_reopenFolder;
     NSString *_availableVersion;
@@ -5434,11 +5487,17 @@ static void wq_apply_design(void);
     [super viewDidAppear:animated];
     [self presentPendingHealthFailure];
     if (wq_startup_checked) {
+        if (!_sawStartup) {   // built by a design switch: the banner is per screen
+            _sawStartup = YES;
+            [self checkForUpdate];
+            [self updateHealthUI];
+        }
         _reopenFolder = nil;
         [NSUserDefaults.standardUserDefaults removeObjectForKey:kWQLastFolderPref];
         return;
     }
     wq_startup_checked = YES;
+    _sawStartup = YES;
     NSDictionary *last = [NSUserDefaults.standardUserDefaults dictionaryForKey:kWQLastFolderPref];
     if (![NSUserDefaults.standardUserDefaults boolForKey:kWQReopenOffPref] && [last[@"path"] isKindOfClass:NSString.class])
         _reopenFolder = last;
@@ -6088,11 +6147,17 @@ static void wq_apply_design(void);
     [self rebuildSystem];
     WQHealthState worst = wq_health_worst(checks);
     if (worst >= WQHealthFailed) _pendingHealthFailure = checks;
+    gHealthFailed = worst >= WQHealthFailed;
     [self updateHealthUI];
-    if (worst < WQHealthFailed) [self reopenLastFolder];
-    else _reopenFolder = nil;
-    if (worst == WQHealthWarning) { [self showHealthWarnings:checks]; return; }
-    if (worst < WQHealthFailed) return;
+    if (worst >= WQHealthFailed) _reopenFolder = nil;
+    if (worst == WQHealthWarning) {
+        // Reopen Last Folder waits for the notice: pushed under an alert it
+        // was dropped (and already forgotten).
+        __weak typeof(self) weakReopen = self;
+        if (![self showHealthWarnings:checks then:^{ [weakReopen reopenLastFolder]; }]) [self reopenLastFolder];
+        return;
+    }
+    if (worst < WQHealthFailed) { [self reopenLastFolder]; return; }
     [self presentPendingHealthFailure];
 }
 
@@ -6105,7 +6170,7 @@ static void wq_apply_design(void);
     } else if (!_appGroupName.length) {
         tint = UIColor.systemOrangeColor;
         _statusLabel.text = WQLocalizedNullable(@"No App Group");
-    } else if (_pendingHealthFailure.count) {
+    } else if (_pendingHealthFailure.count || gHealthFailed) {
         tint = UIColor.systemRedColor;
         _statusLabel.text = WQLocalizedNullable(@"Access check failed.");
     } else {
@@ -6153,11 +6218,12 @@ static void wq_apply_design(void);
     WQHealthViewController *health = [[WQHealthViewController alloc] initWithChecks:checks];
     __weak typeof(self) weakSelf = self;
     health.onPassed = ^(NSArray<WQHealthCheck *> *passed) {
+        gHealthFailed = NO;
         [weakSelf rebuildLocations];
         [weakSelf rebuildContainers];
         [weakSelf rebuildSystem];
         [weakSelf updateHealthUI];
-        if (wq_health_worst(passed) == WQHealthWarning) [weakSelf showHealthWarnings:passed];
+        if (wq_health_worst(passed) == WQHealthWarning) [weakSelf showHealthWarnings:passed then:nil];
     };
     WQNavigationController *nav = [[WQNavigationController alloc] initWithRootViewController:health];
     nav.modalPresentationStyle = UIModalPresentationFullScreen;
@@ -6167,7 +6233,8 @@ static void wq_apply_design(void);
 
 // Each set of warnings once per build, so the same notice doesn't repeat on
 // every launch.
-- (void)showHealthWarnings:(NSArray<WQHealthCheck *> *)checks
+// YES when the notice is shown; `then` runs after its OK.
+- (BOOL)showHealthWarnings:(NSArray<WQHealthCheck *> *)checks then:(void (^)(void))then
 {
     NSMutableArray<NSString *> *lines = [NSMutableArray new];
     for (WQHealthCheck *c in checks)
@@ -6175,13 +6242,14 @@ static void wq_apply_design(void);
     NSString *text = [lines componentsJoinedByString:@"\n\n"];
     NSString *key = [NSString stringWithFormat:@"%@|%@", NSBundle.mainBundle.infoDictionary[@"CFBundleVersion"], text];
     NSUserDefaults *defaults = NSUserDefaults.standardUserDefaults;
-    if ([[defaults stringForKey:@"WQHealthWarned"] isEqualToString:key]) return;
+    if ([[defaults stringForKey:@"WQHealthWarned"] isEqualToString:key]) return NO;
     [defaults setObject:key forKey:@"WQHealthWarned"];
     UIAlertController *alert = wq_alert_controller(@"Not everything works here", text, UIAlertControllerStyleAlert);
-    [alert addAction:wq_alert_action(@"OK", UIAlertActionStyleCancel, nil)];
+    [alert addAction:wq_alert_action(@"OK", UIAlertActionStyleCancel, ^(UIAlertAction *__unused a) { if (then) then(); })];
     UIViewController *host = self.tabBarController ?: self.navigationController ?: self;
     while (host.presentedViewController) host = host.presentedViewController;
     [host presentViewController:alert animated:YES completion:nil];
+    return YES;
 }
 
 - (void)reopenLastFolder
@@ -6633,6 +6701,7 @@ static NSString *const kWQTroubleshootingFooter =
     // A failed startup check waits here until the start screen is in front
     // with nothing presented over it.
     NSArray<WQHealthCheck *> *_pendingHealthFailure;
+    BOOL _sawStartup;
     BOOL _healthRetryScheduled;
     NSDictionary *_reopenFolder;   // the last folder, opened once the startup check passed
     NSString *_availableVersion;   // a newer release on GitHub
@@ -6707,12 +6776,17 @@ static NSString *const kWQTroubleshootingFooter =
     [super viewDidAppear:animated];
     [self presentPendingHealthFailure];
     if (wq_startup_checked) {
+        if (!_sawStartup) {   // built by a design switch: the banner is per screen
+            _sawStartup = YES;
+            [self checkForUpdate];
+        }
         // Back on the start screen: nothing to reopen next time.
         _reopenFolder = nil;
         [NSUserDefaults.standardUserDefaults removeObjectForKey:kWQLastFolderPref];
         return;
     }
     wq_startup_checked = YES;
+    _sawStartup = YES;
     NSDictionary *last = [NSUserDefaults.standardUserDefaults dictionaryForKey:kWQLastFolderPref];
     if (![NSUserDefaults.standardUserDefaults boolForKey:kWQReopenOffPref] && [last[@"path"] isKindOfClass:NSString.class])
         _reopenFolder = last;
@@ -6738,10 +6812,16 @@ static NSString *const kWQTroubleshootingFooter =
     [self rebuildLocations];   // App Bundles depends on the result
     [self.tableView reloadData];
     WQHealthState worst = wq_health_worst(checks);
-    if (worst < WQHealthFailed) [self reopenLastFolder];
-    else _reopenFolder = nil;
-    if (worst == WQHealthWarning) { [self showHealthWarnings:checks]; return; }
-    if (worst < WQHealthFailed) return;
+    gHealthFailed = worst >= WQHealthFailed;
+    if (worst >= WQHealthFailed) _reopenFolder = nil;
+    if (worst == WQHealthWarning) {
+        // Reopen Last Folder waits for the notice: pushed under an alert it
+        // was dropped (and already forgotten).
+        __weak typeof(self) weakReopen = self;
+        if (![self showHealthWarnings:checks then:^{ [weakReopen reopenLastFolder]; }]) [self reopenLastFolder];
+        return;
+    }
+    if (worst < WQHealthFailed) { [self reopenLastFolder]; return; }
     _pendingHealthFailure = checks;
     [self presentPendingHealthFailure];
 }
@@ -6863,9 +6943,10 @@ static NSString *const kWQTroubleshootingFooter =
     WQHealthViewController *health = [[WQHealthViewController alloc] initWithChecks:checks];
     __weak typeof(self) weakSelf = self;
     health.onPassed = ^(NSArray<WQHealthCheck *> *passed) {
+        gHealthFailed = NO;
         [weakSelf rebuildLocations];
         [weakSelf.tableView reloadData];
-        if (wq_health_worst(passed) == WQHealthWarning) [weakSelf showHealthWarnings:passed];
+        if (wq_health_worst(passed) == WQHealthWarning) [weakSelf showHealthWarnings:passed then:nil];
     };
     WQNavigationController *nav = [[WQNavigationController alloc] initWithRootViewController:health];
     nav.modalPresentationStyle = UIModalPresentationFullScreen;
@@ -6875,7 +6956,8 @@ static NSString *const kWQTroubleshootingFooter =
 
 // Each set of warnings once per build, so the same notice doesn't repeat on
 // every launch.
-- (void)showHealthWarnings:(NSArray<WQHealthCheck *> *)checks
+// YES when the notice is shown; `then` runs after its OK.
+- (BOOL)showHealthWarnings:(NSArray<WQHealthCheck *> *)checks then:(void (^)(void))then
 {
     NSMutableArray *lines = [NSMutableArray new];
     for (WQHealthCheck *c in checks)
@@ -6883,13 +6965,14 @@ static NSString *const kWQTroubleshootingFooter =
     NSString *text = [lines componentsJoinedByString:@"\n\n"];
     NSString *key = [NSString stringWithFormat:@"%@|%@", NSBundle.mainBundle.infoDictionary[@"CFBundleVersion"], text];
     NSUserDefaults *defaults = NSUserDefaults.standardUserDefaults;
-    if ([[defaults stringForKey:@"WQHealthWarned"] isEqualToString:key]) return;
+    if ([[defaults stringForKey:@"WQHealthWarned"] isEqualToString:key]) return NO;
     [defaults setObject:key forKey:@"WQHealthWarned"];
     UIAlertController *alert = wq_alert_controller(@"Not everything works here", text, UIAlertControllerStyleAlert);
-    [alert addAction:wq_alert_action(@"OK", UIAlertActionStyleCancel, nil)];
+    [alert addAction:wq_alert_action(@"OK", UIAlertActionStyleCancel, ^(UIAlertAction *__unused a) { if (then) then(); })];
     UIViewController *host = self.navigationController ?: self;
     while (host.presentedViewController) host = host.presentedViewController;
     [host presentViewController:alert animated:YES completion:nil];
+    return YES;
 }
 
 // "by kolbicz" with GitHub and X links, under the last section.

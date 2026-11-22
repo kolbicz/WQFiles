@@ -114,6 +114,10 @@ NSDictionary<NSString *, NSNumber *> *wq_identity_for_stat(const struct stat *st
 // An app with the database open locks x and x-shm but not x-wal, so changing
 // any one of them alone while it runs loses data. Writes, replaces and deletes
 // refuse every file of a set another process has locked (a readable reason).
+// Limits: only a held lock is seen. In WAL mode an open database holds one;
+// with a rollback journal it is locked only during a transaction, so an app
+// that has it open but idle is not noticed. Sets go by name alone: any file
+// ending in -wal, -shm or -journal counts as part of one.
 // The base name of a set ("x" for x, x-wal, x-shm, x-journal).
 NSString *wq_sqlite_family_base(NSString *name);
 BOOL wq_sqlite_is_companion(NSString *name);

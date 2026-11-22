@@ -459,6 +459,7 @@ static NSArray<NSString *> *wq_store_fetch_batch(NSArray<NSString *> *ids, NSStr
     for (NSString *bid in ids) {
         NSURL *url = art[bid];
         if (!url) { [missing addObject:bid]; continue; }
+        if (!wq_store_icons_enabled()) continue;   // switched off meanwhile: no more requests
         NSData *png = wq_store_get(url, WQStoreIconsMaxIconBytes);
         UIImage *image = png ? [UIImage imageWithData:png scale:1] : nil;
         if (!image.CGImage) continue;   // try again next launch
@@ -491,7 +492,9 @@ static void wq_store_flush(void)
             NSMutableArray<NSString *> *saved = [NSMutableArray new];
             NSArray<NSString *> *missing = wq_store_fetch_batch(batch, country, saved);
             // Not in this region's store: the US store has most apps.
-            if (missing.count && ![country isEqualToString:@"us"]) missing = wq_store_fetch_batch(missing, @"us", saved);
+            if (missing.count && ![country isEqualToString:@"us"] && wq_store_icons_enabled())
+                missing = wq_store_fetch_batch(missing, @"us", saved);
+            else if (!wq_store_icons_enabled()) missing = nil;   // unknown, not "not in the App Store"
             asked += batch.count;
             found += saved.count;
             if (missing) [missed addObjectsFromArray:missing];
@@ -564,8 +567,14 @@ void wq_reload_visible_rows(UITableView *tableView)
 // Rounded app icon for a bundle id, cached. Falls back to the closest parent
 // app's icon (extensions: com.foo.app.widget -> com.foo.app), then to a
 // neutral service tile. Nil only without a bundle id.
-UIImage *wq_app_icon(NSString *bundleID)
+static UIImage *wq_app_icon_found(NSString *bundleID, BOOL *found);
+
+UIImage *wq_app_icon(NSString *bundleID) { return wq_app_icon_found(bundleID, NULL); }
+
+// *found: a real icon (not the neutral tile) is now in the cache.
+static UIImage *wq_app_icon_found(NSString *bundleID, BOOL *found)
 {
+    if (found) *found = NO;
     if (!bundleID.length) return nil;
     static NSCache *cache;
     static dispatch_once_t once;
@@ -575,6 +584,7 @@ UIImage *wq_app_icon(NSString *bundleID)
         [NSNotificationCenter.defaultCenter addObserverForName:WQStoreIconsChangedNotification object:nil queue:nil
                                                     usingBlock:^(NSNotification *note) {
             NSArray *ids = note.userInfo[@"ids"];
+            if (note.userInfo[@"warmed"]) return;   // the cache was just filled for these
             if (![ids isKindOfClass:NSArray.class]) { [cache removeAllObjects]; return; }
             for (NSString *bid in ids) [cache removeObjectForKey:bid];
         }];
@@ -607,6 +617,28 @@ UIImage *wq_app_icon(NSString *bundleID)
     if (!raw && [appID isEqualToString:bundleID]) raw = wq_store_icon(bundleID, background);
     UIImage *icon = raw ? wq_round_icon(raw) : wq_service_tile(bundleID);
     if (raw || background) [cache setObject:icon forKey:bundleID];
+    if (found) *found = raw != nil;
+    // A main-thread miss (the cache was emptied by the App Store Icons
+    // switch, or the list never warmed this id): look the icon up in the
+    // background once, so the row isn't stuck with the tile and the next
+    // cell doesn't repeat the lookups here.
+    if (!raw && !background) {
+        static NSMutableSet<NSString *> *warming;   // main thread only
+        if (!warming) warming = [NSMutableSet new];
+        if (![warming containsObject:bundleID]) {
+            [warming addObject:bundleID];
+            dispatch_async(dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{
+                BOOL changed = NO;
+                wq_app_icon_found(bundleID, &changed);
+                dispatch_async(dispatch_get_main_queue(), ^{
+                    [warming removeObject:bundleID];
+                    if (changed)
+                        [NSNotificationCenter.defaultCenter postNotificationName:WQStoreIconsChangedNotification object:nil
+                                                                        userInfo:@{ @"ids": @[bundleID], @"warmed": @YES }];
+                });
+            });
+        }
+    }
     return icon;
 }
 

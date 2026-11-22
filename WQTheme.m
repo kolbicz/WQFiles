@@ -108,6 +108,9 @@ static NSString *WQThemeIdentifier(NSString *name)
         else if (id_.length && ![id_ hasSuffix:@"-"]) [id_ appendString:@"-"];
     }
     while ([id_ hasSuffix:@"-"]) [id_ deleteCharactersInRange:NSMakeRange(id_.length - 1, 1)];
+    // "Default" and "Color" are the built-in choices' ids: a theme file with
+    // such a name would be saved and listed but could never be the active one.
+    if ([id_ isEqualToString:WQThemeDefault] || [id_ isEqualToString:WQThemeCustomColor]) [id_ appendString:@"-theme"];
     // Names in other scripts: a stable id from the name's hash.
     return id_.length ? id_ : [NSString stringWithFormat:@"theme-%lx", (unsigned long)name.hash];
 }
