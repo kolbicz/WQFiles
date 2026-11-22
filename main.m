@@ -1794,6 +1794,10 @@ static void wq_open_custom_inspector(UIViewController *host, NSString *path, UIV
 @implementation WQDirViewController {
     NSString *_path;
     NSArray<WQItem *> *_all;     // everything in the folder
+    // Per listing, not per tap, cell or keystroke: both read the disk.
+    NSArray<NSString *> *_backupUnitPaths;   // deletable backup units among _items
+    NSArray<WQItem *> *_backupUnitsFor;      // the _items they were computed for
+    NSSet<NSString *> *_backedUpIDs;         // apps with a backup (Backed Up filter); nil = not read yet
     BOOL _allEnumerated;         // _all came from container enumeration (the folder itself can't be listed)
     BOOL _recordedRecent;        // added to Recent when it first appeared
     NSArray<WQItem *> *_items;   // what the search lets through (shown)
@@ -2165,8 +2169,8 @@ static void wq_open_custom_inspector(UIViewController *host, NSString *path, UIV
     NSArray<WQItem *> *shown = _all ?: @[];
     NSInteger filter = self.containerFilter;
     if (filter) {
-        NSSet *backedUp = nil;
-        if (filter == 3) {
+        NSSet *backedUp = _backedUpIDs;
+        if (filter == 3 && !backedUp) {
             NSMutableSet *ids = [NSMutableSet new];
             NSString *root = wq_app_backup_root();
             for (NSString *bid in [NSFileManager.defaultManager contentsOfDirectoryAtPath:root error:nil]) {
@@ -2174,7 +2178,7 @@ static void wq_open_custom_inspector(UIViewController *host, NSString *path, UIV
                 NSArray *units = [NSFileManager.defaultManager contentsOfDirectoryAtPath:[root stringByAppendingPathComponent:bid] error:nil];
                 for (NSString *u in units) if (![u hasPrefix:@"."]) { [ids addObject:bid]; break; }
             }
-            backedUp = ids;
+            backedUp = _backedUpIDs = ids;
         }
         shown = [shown filteredArrayUsingPredicate:[NSPredicate predicateWithBlock:^BOOL(WQItem *item, NSDictionary *__unused b) {
             NSString *identifier = item.bundleID ?: item.label ?: @"";
@@ -2263,14 +2267,18 @@ static void wq_open_custom_inspector(UIViewController *host, NSString *path, UIV
 
 - (NSArray<NSString *> *)backupUnitPathsInItems
 {
+    if (_backupUnitPaths && _backupUnitsFor == _items) return _backupUnitPaths;
     NSMutableArray<NSString *> *paths = [NSMutableArray new];
     for (WQItem *item in _items)
         if (wq_backup_unit_deletable(item.path)) [paths addObject:item.path];
+    _backupUnitPaths = paths;
+    _backupUnitsFor = _items;
     return paths;
 }
 
 - (void)updateBackupSelectionAvailability
 {
+    if (!_selectItem) return;   // not a backup folder: no Select button, nothing to check
     _selectItem.enabled = !_selectingBackups && [self backupUnitPathsInItems].count > 0;
 }
 
@@ -3014,6 +3022,7 @@ static NSString *wq_sqlite_set_key(NSString *path)
                 return;
             }
             self->_all = items;
+            self->_backedUpIDs = nil;   // read again with the new listing
             self->_allEnumerated = haveFullPaths;
             [self applyFilter];
             [self countChildrenOf:items generation:generation cancellation:cancellation];
@@ -6366,7 +6375,11 @@ static NSString *const kWQTroubleshootingFooter =
 
 #pragma mark - WQ Prism settings
 
-@implementation WQPrismSettingsViewController
+@implementation WQPrismSettingsViewController {
+    // Read off the main thread when the screen appears (keychain, a scan of
+    // the inspectors folder), not while a cell is configured.
+    NSString *_passwordSummary, *_inspectorsSummary;
+}
 
 - (instancetype)init
 {
@@ -6392,6 +6405,18 @@ static NSString *const kWQTroubleshootingFooter =
 {
     [super viewWillAppear:animated];
     [self.tableView reloadData];
+    __weak typeof(self) weakSelf = self;
+    dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
+        NSString *password = WQLocalized(wq_sharing_password() ? @"Fixed" : @"Random each time");
+        NSString *inspectors = wq_inspectors_summary();
+        dispatch_async(dispatch_get_main_queue(), ^{
+            typeof(self) me = weakSelf;
+            if (!me) return;
+            me->_passwordSummary = password;
+            me->_inspectorsSummary = inspectors;
+            [me.tableView reloadData];
+        });
+    });
 }
 
 - (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView { return 3; }
@@ -6501,8 +6526,8 @@ static NSString *const kWQTroubleshootingFooter =
     c.text = WQLocalizedNullable(titles[(NSUInteger)indexPath.row]);
     c.image = [UIImage systemImageNamed:symbols[(NSUInteger)indexPath.row]];
     if (indexPath.row == 0) c.secondaryText = wq_language_name(wq_chosen_language());
-    if (indexPath.row == 1) c.secondaryText = WQLocalized(wq_sharing_password() ? @"Fixed" : @"Random each time");
-    if (indexPath.row == 2) c.secondaryText = wq_inspectors_summary();
+    if (indexPath.row == 1) c.secondaryText = _passwordSummary;
+    if (indexPath.row == 2) c.secondaryText = _inspectorsSummary;
     if (indexPath.row == 4) c.secondaryText = wq_app_version_line();
     cell.contentConfiguration = c;
     cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;

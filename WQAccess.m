@@ -2040,7 +2040,7 @@ WQTreeCount wq_tree_count(NSString *path, NSUInteger limit)
         return count;
     }
     NSMutableArray<NSString *> *pending = [NSMutableArray arrayWithObject:path];
-    while (pending.count) {
+    while (pending.count) @autoreleasepool {
         if (count.regular + count.other >= limit) { count.state = WQTreeCountLimited; break; }
         NSString *dir = pending.lastObject;
         [pending removeLastObject];
@@ -3490,7 +3490,7 @@ WQMeasureResult wq_measure_tree(NSString *dir, WQScanCancellation *cancellation,
     if (!enumerator) return WQMeasureResultLimited;
 
     unsigned long long total = 0;
-    for (NSURL *item in enumerator) {
+    for (NSURL *item in enumerator) @autoreleasepool {
         if (cancellation.isCancelled) return WQMeasureResultCancelled;
         NSNumber *isLink = nil, *isRegular = nil, *size = nil;
         NSError *error = nil;
@@ -3546,7 +3546,10 @@ WQMeasureResult wq_measure_tree_resumable(NSString *dir, NSString *scope, NSStri
         [saved[@"bytes"] longLongValue] >= 0 && [saved[@"limited"] isKindOfClass:NSNumber.class];
     NSString *prefix = [dir stringByAppendingString:@"/"];
     for (id path in valid ? pendingSaved : @[]) {
-        if (![path isKindOfClass:NSString.class] || ![path isEqual:[path stringByStandardizingPath]] ||
+        // Not stringByStandardizingPath: it strips "/private", so every
+        // container path (/private/var/…) compared unequal and the saved
+        // progress was thrown away.
+        if (![path isKindOfClass:NSString.class] || !WQAbsolutePathGrammar(path) ||
             (![path isEqual:dir] && ![path hasPrefix:prefix])) valid = NO;
     }
     NSMutableArray *pending = valid ? [pendingSaved mutableCopy] : [NSMutableArray arrayWithObject:dir];
@@ -3574,7 +3577,7 @@ WQMeasureResult wq_measure_tree_resumable(NSString *dir, NSString *scope, NSStri
         // descriptor or a sandbox token across a saved checkpoint.
         performIO(^{
             CFAbsoluteTime sliceStart = CFAbsoluteTimeGetCurrent();
-            do {
+            do @autoreleasepool {
                 if (cancellation.isCancelled) return;
                 NSString *path = pending.lastObject;
                 [pending removeLastObject];
@@ -3672,6 +3675,7 @@ static BOOL wq_purge_fd(int fd, NSString *path, unsigned long long *freed, WQSca
         struct dirent *entry = readdir(dir);
         if (!entry) { if (errno) ok = NO; break; }
         if (!strcmp(entry->d_name, ".") || !strcmp(entry->d_name, "..")) continue;
+        @autoreleasepool {
         NSString *name = [NSFileManager.defaultManager stringWithFileSystemRepresentation:entry->d_name length:strlen(entry->d_name)];
         if (!name) { ok = NO; break; }
         WQ_TREE_HOOK(@"purgeChild", path);
@@ -3679,6 +3683,7 @@ static BOOL wq_purge_fd(int fd, NSString *path, unsigned long long *freed, WQSca
         // in the final race window. Symlink children are unlinked, never followed.
         if (!wq_purge_root_matches(path, fd)) { ok = NO; break; }
         if (!wq_remove_entry(fd, name, [path stringByAppendingPathComponent:name], freed, cancellation)) ok = NO;
+        }
     }
     if (closedir(dir) != 0) ok = NO;
     return ok;

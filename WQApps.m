@@ -863,7 +863,9 @@ static void WQAppScanWatch(WQScanCancellation *cancellation, NSUInteger lastSeri
             app.bytes = appSize;
             app.sizeKnown = sizeKnown;
             if (granted && hasIdentity && !sizeKnown) sizeLimited++;
-            app.backups = bid.length ? wq_app_backups(bid) : @[];
+            // Not read here: the result rows don't carry backups, and
+            // refreshBackups reads them for the list once the scan is shown.
+            app.backups = @[];
             NSString *why = nil;
             app.installState = bid.length ? wq_app_install_state(bid, &why) : WQInstallUnknown;
             installCounts[app.installState]++;

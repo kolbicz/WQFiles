@@ -211,7 +211,14 @@ void wq_share_folder(UIViewController *host, NSString *dir, NSString *zipName, U
     preparation.hud = hud;
     objc_setAssociatedObject(host, &kWQSharePreparationKey, preparation, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     [host presentViewController:hud animated:YES completion:nil];
-    dispatch_async(wq_io(), ^{
+    // Its own queue: compressing a large folder on the shared I/O queue made
+    // every listing and the Apps and Cache scans wait until it was done.
+    static dispatch_queue_t zipQueue;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+        zipQueue = dispatch_queue_create("wq.share-zip", dispatch_queue_attr_make_with_qos_class(DISPATCH_QUEUE_SERIAL, QOS_CLASS_USER_INITIATED, 0));
+    });
+    dispatch_async(zipQueue, ^{
         if (preparation.isCancelled) return;
         NSString *resolvedName = zipName ?: wq_zip_name(dir);
         NSString *safe = [[resolvedName componentsSeparatedByCharactersInSet:

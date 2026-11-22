@@ -723,6 +723,15 @@ static NSString *WQWebDisposition(NSString *kind, NSString *name)
 
 - (void)sendZip:(int)fd path:(NSString *)path components:(NSArray<NSString *> *)components head:(BOOL)head
 {
+    // HEAD: the headers only, without a length. Building the whole archive
+    // (up to 4 GB of temporary storage) just to learn its size and drop it
+    // is not worth it.
+    if (head) {
+        static const char reply[] = "HTTP/1.1 200 OK\r\nContent-Type: application/zip\r\nConnection: close\r\n"
+                                    "Cache-Control: no-store\r\nX-Content-Type-Options: nosniff\r\n\r\n";
+        WQWebSend(fd, reply, sizeof reply - 1);
+        return;
+    }
     NSString *dir = [NSTemporaryDirectory() stringByAppendingPathComponent:[@"WQWeb-" stringByAppendingString:NSUUID.UUID.UUIDString]];
     [NSFileManager.defaultManager createDirectoryAtPath:dir withIntermediateDirectories:YES attributes:nil error:nil];
     NSString *name = components.count ? components.lastObject : (_title.length ? _title : path.lastPathComponent);
@@ -752,7 +761,8 @@ static NSString *WQWebDisposition(NSString *kind, NSString *name)
     struct stat st;
     if (file >= 0 && fstat(file, &st) == 0) {
         NSString *h = [NSString stringWithFormat:@"HTTP/1.1 200 OK\r\nContent-Type: application/zip\r\nContent-Length: %lld\r\n"
-                       "Content-Disposition: %@\r\nConnection: close\r\nCache-Control: no-store\r\n\r\n",
+                       "Content-Disposition: %@\r\nConnection: close\r\nCache-Control: no-store\r\n"
+                       "X-Content-Type-Options: nosniff\r\n\r\n",
                        (long long)st.st_size, WQWebDisposition(@"attachment", zip.lastPathComponent)];
         NSData *headData = [h dataUsingEncoding:NSUTF8StringEncoding];
         if (WQWebSend(fd, headData.bytes, headData.length) && !head) {

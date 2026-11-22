@@ -165,53 +165,67 @@ static inline NSString *WQAppsSupportTreeSignatureOmitting(NSString *path, BOOL 
     if (exists) *exists = YES;
 
     NSMutableArray<NSString *> *relativePaths = [NSMutableArray new];
-    for (NSString *relative in [NSFileManager.defaultManager enumeratorAtPath:path])
-        [relativePaths addObject:relative];
+    @autoreleasepool {
+        for (NSString *relative in [NSFileManager.defaultManager enumeratorAtPath:path])
+            [relativePaths addObject:relative];
+    }
     [relativePaths sortUsingSelector:@selector(compare:)];
 
     CC_SHA256_CTX ctx;
     CC_SHA256_Init(&ctx);
+    // A pool per item: a restore walks trees of 100k+ files several times in
+    // one block. The error leaves the pool in a strong local.
+    NSString *failure = nil;
+    int failureErrno = 0;
     for (NSString *relative in relativePaths) {
-        NSString *item = [path stringByAppendingPathComponent:relative];
-        struct stat itemStat;
-        if (lstat(item.fileSystemRepresentation, &itemStat) != 0) {
-            if (errorOut) *errorOut = [NSString stringWithFormat:@"Cannot inspect %@", relative];
-            return nil;
-        }
-        if (WQAppsSupportIsUnsupportedSpecial(itemStat.st_mode)) {
-            if (omitted) (*omitted)++;
-            continue;
-        }
-        unsigned type = (unsigned)(itemStat.st_mode & S_IFMT);
-        const char *name = relative.UTF8String;
-        NSUInteger nameLength = name ? strlen(name) : 0;
-        if (!name) {
-            if (errorOut) *errorOut = [NSString stringWithFormat:@"Cannot encode %@", relative];
-            return nil;
-        }
-        uint8_t tag = includeIdentity ? 'I' : 'S';
-        CC_SHA256_Update(&ctx, &tag, 1);
-        WQAppsSupportHashBlob(&ctx, name, nameLength);
-        WQAppsSupportHashU64(&ctx, type);
-        WQAppsSupportHashU64(&ctx, (uint64_t)(itemStat.st_mode & 07777));
-        if (includeIdentity) {
-            WQAppsSupportHashU64(&ctx, (uint64_t)itemStat.st_ino);
-            WQAppsSupportHashU64(&ctx, (uint64_t)itemStat.st_size);
-            WQAppsSupportHashU64(&ctx, (uint64_t)itemStat.st_mtimespec.tv_sec);
-            WQAppsSupportHashU64(&ctx, (uint64_t)itemStat.st_mtimespec.tv_nsec);
-            WQAppsSupportHashU64(&ctx, (uint64_t)itemStat.st_ctimespec.tv_sec);
-            WQAppsSupportHashU64(&ctx, (uint64_t)itemStat.st_ctimespec.tv_nsec);
-        } else if (type == S_IFREG) {
-            WQAppsSupportHashU64(&ctx, (uint64_t)itemStat.st_size);
-        } else if (type == S_IFLNK) {
-            char target[PATH_MAX];
-            ssize_t length = readlink(item.fileSystemRepresentation, target, sizeof(target) - 1);
-            if (length < 0 || length >= (ssize_t)sizeof(target) - 1) {
-                if (errorOut) *errorOut = [NSString stringWithFormat:@"Cannot inspect link %@", relative];
-                return nil;
+        @autoreleasepool {
+            NSString *item = [path stringByAppendingPathComponent:relative];
+            struct stat itemStat;
+            if (lstat(item.fileSystemRepresentation, &itemStat) != 0) {
+                failure = [NSString stringWithFormat:@"Cannot inspect %@", relative];
+                break;
             }
-            WQAppsSupportHashBlob(&ctx, target, (NSUInteger)length);
+            if (WQAppsSupportIsUnsupportedSpecial(itemStat.st_mode)) {
+                if (omitted) (*omitted)++;
+                continue;
+            }
+            unsigned type = (unsigned)(itemStat.st_mode & S_IFMT);
+            const char *name = relative.UTF8String;
+            NSUInteger nameLength = name ? strlen(name) : 0;
+            if (!name) {
+                failure = [NSString stringWithFormat:@"Cannot encode %@", relative];
+                break;
+            }
+            uint8_t tag = includeIdentity ? 'I' : 'S';
+            CC_SHA256_Update(&ctx, &tag, 1);
+            WQAppsSupportHashBlob(&ctx, name, nameLength);
+            WQAppsSupportHashU64(&ctx, type);
+            WQAppsSupportHashU64(&ctx, (uint64_t)(itemStat.st_mode & 07777));
+            if (includeIdentity) {
+                WQAppsSupportHashU64(&ctx, (uint64_t)itemStat.st_ino);
+                WQAppsSupportHashU64(&ctx, (uint64_t)itemStat.st_size);
+                WQAppsSupportHashU64(&ctx, (uint64_t)itemStat.st_mtimespec.tv_sec);
+                WQAppsSupportHashU64(&ctx, (uint64_t)itemStat.st_mtimespec.tv_nsec);
+                WQAppsSupportHashU64(&ctx, (uint64_t)itemStat.st_ctimespec.tv_sec);
+                WQAppsSupportHashU64(&ctx, (uint64_t)itemStat.st_ctimespec.tv_nsec);
+            } else if (type == S_IFREG) {
+                WQAppsSupportHashU64(&ctx, (uint64_t)itemStat.st_size);
+            } else if (type == S_IFLNK) {
+                char target[PATH_MAX];
+                ssize_t length = readlink(item.fileSystemRepresentation, target, sizeof(target) - 1);
+                if (length < 0 || length >= (ssize_t)sizeof(target) - 1) {
+                    failure = [NSString stringWithFormat:@"Cannot inspect link %@", relative];
+                    break;
+                }
+                WQAppsSupportHashBlob(&ctx, target, (NSUInteger)length);
+            }
         }
+        if (failure) break;
+    }
+    if (failure) {
+        if (errorOut) *errorOut = failure;
+        if (failureErrno) errno = failureErrno;
+        return nil;
     }
     unsigned char digest[CC_SHA256_DIGEST_LENGTH];
     CC_SHA256_Final(digest, &ctx);
@@ -252,74 +266,88 @@ static inline NSString *WQAppsSupportTreeContentSignature(NSString *path, BOOL *
     if (exists) *exists = YES;
 
     NSMutableArray<NSString *> *relativePaths = [NSMutableArray new];
-    for (NSString *relative in [NSFileManager.defaultManager enumeratorAtPath:path])
-        [relativePaths addObject:relative];
+    @autoreleasepool {
+        for (NSString *relative in [NSFileManager.defaultManager enumeratorAtPath:path])
+            [relativePaths addObject:relative];
+    }
     [relativePaths sortUsingSelector:@selector(compare:)];
 
     CC_SHA256_CTX ctx;
     CC_SHA256_Init(&ctx);
     uint8_t buffer[65536];
+    // A pool per item: a restore walks trees of 100k+ files several times in
+    // one block. The error leaves the pool in a strong local.
+    NSString *failure = nil;
+    int failureErrno = 0;
     for (NSString *relative in relativePaths) {
-        NSString *item = [path stringByAppendingPathComponent:relative];
-        struct stat itemStat;
-        if (lstat(item.fileSystemRepresentation, &itemStat) != 0) {
-            if (errorOut) *errorOut = [NSString stringWithFormat:@"Cannot inspect %@", relative];
-            return nil;
-        }
-        const char *name = relative.UTF8String;
-        if (!name) {
-            if (errorOut) *errorOut = [NSString stringWithFormat:@"Cannot encode %@", relative];
-            return nil;
-        }
-        uint8_t tag = 'C';
-        CC_SHA256_Update(&ctx, &tag, 1);
-        WQAppsSupportHashBlob(&ctx, name, strlen(name));
-        WQAppsSupportHashU64(&ctx, (uint64_t)(itemStat.st_mode & S_IFMT));
-        WQAppsSupportHashU64(&ctx, (uint64_t)(itemStat.st_mode & 07777));
-        WQAppsSupportHashU64(&ctx, (uint64_t)itemStat.st_size);
-        if (S_ISREG(itemStat.st_mode)) {
-            int fd = open(item.fileSystemRepresentation, O_RDONLY | O_NOFOLLOW | O_CLOEXEC);
-            if (fd < 0) {
-                if (errorOut) *errorOut = [NSString stringWithFormat:@"Cannot read %@", relative];
-                return nil;
+        @autoreleasepool {
+            NSString *item = [path stringByAppendingPathComponent:relative];
+            struct stat itemStat;
+            if (lstat(item.fileSystemRepresentation, &itemStat) != 0) {
+                failure = [NSString stringWithFormat:@"Cannot inspect %@", relative];
+                break;
             }
-            struct stat after;
-            BOOL ok = fstat(fd, &after) == 0 && S_ISREG(after.st_mode) &&
-                after.st_dev == itemStat.st_dev && after.st_ino == itemStat.st_ino;
-            for (;;) {
-                if (!ok) break;
-                ssize_t n = read(fd, buffer, sizeof(buffer));
-                if (n < 0) {
-                    if (errno == EINTR) continue;
-                    ok = NO;
+            const char *name = relative.UTF8String;
+            if (!name) {
+                failure = [NSString stringWithFormat:@"Cannot encode %@", relative];
+                break;
+            }
+            uint8_t tag = 'C';
+            CC_SHA256_Update(&ctx, &tag, 1);
+            WQAppsSupportHashBlob(&ctx, name, strlen(name));
+            WQAppsSupportHashU64(&ctx, (uint64_t)(itemStat.st_mode & S_IFMT));
+            WQAppsSupportHashU64(&ctx, (uint64_t)(itemStat.st_mode & 07777));
+            WQAppsSupportHashU64(&ctx, (uint64_t)itemStat.st_size);
+            if (S_ISREG(itemStat.st_mode)) {
+                int fd = open(item.fileSystemRepresentation, O_RDONLY | O_NOFOLLOW | O_CLOEXEC);
+                if (fd < 0) {
+                    failure = [NSString stringWithFormat:@"Cannot read %@", relative];
                     break;
                 }
-                if (n == 0) break;
-                CC_SHA256_Update(&ctx, buffer, (CC_LONG)n);
+                struct stat after;
+                BOOL ok = fstat(fd, &after) == 0 && S_ISREG(after.st_mode) &&
+                    after.st_dev == itemStat.st_dev && after.st_ino == itemStat.st_ino;
+                for (;;) {
+                    if (!ok) break;
+                    ssize_t n = read(fd, buffer, sizeof(buffer));
+                    if (n < 0) {
+                        if (errno == EINTR) continue;
+                        ok = NO;
+                        break;
+                    }
+                    if (n == 0) break;
+                    CC_SHA256_Update(&ctx, buffer, (CC_LONG)n);
+                }
+                struct stat finalStat;
+                if (ok && (fstat(fd, &finalStat) != 0 ||
+                           finalStat.st_size != itemStat.st_size ||
+                           finalStat.st_mtimespec.tv_sec != itemStat.st_mtimespec.tv_sec ||
+                           finalStat.st_mtimespec.tv_nsec != itemStat.st_mtimespec.tv_nsec ||
+                           finalStat.st_ctimespec.tv_sec != itemStat.st_ctimespec.tv_sec ||
+                           finalStat.st_ctimespec.tv_nsec != itemStat.st_ctimespec.tv_nsec)) ok = NO;
+                int err = errno;
+                close(fd);
+                if (!ok) {
+                    failure = [NSString stringWithFormat:@"%@ changed while it was read", relative];
+                    failureErrno = err;
+                    break;
+                }
+            } else if (S_ISLNK(itemStat.st_mode)) {
+                char target[PATH_MAX];
+                ssize_t length = readlink(item.fileSystemRepresentation, target, sizeof(target) - 1);
+                if (length < 0 || length >= (ssize_t)sizeof(target) - 1) {
+                    failure = [NSString stringWithFormat:@"Cannot inspect link %@", relative];
+                    break;
+                }
+                WQAppsSupportHashBlob(&ctx, target, (NSUInteger)length);
             }
-            struct stat finalStat;
-            if (ok && (fstat(fd, &finalStat) != 0 ||
-                       finalStat.st_size != itemStat.st_size ||
-                       finalStat.st_mtimespec.tv_sec != itemStat.st_mtimespec.tv_sec ||
-                       finalStat.st_mtimespec.tv_nsec != itemStat.st_mtimespec.tv_nsec ||
-                       finalStat.st_ctimespec.tv_sec != itemStat.st_ctimespec.tv_sec ||
-                       finalStat.st_ctimespec.tv_nsec != itemStat.st_ctimespec.tv_nsec)) ok = NO;
-            int err = errno;
-            close(fd);
-            if (!ok) {
-                if (errorOut) *errorOut = [NSString stringWithFormat:@"%@ changed while it was read", relative];
-                errno = err;
-                return nil;
-            }
-        } else if (S_ISLNK(itemStat.st_mode)) {
-            char target[PATH_MAX];
-            ssize_t length = readlink(item.fileSystemRepresentation, target, sizeof(target) - 1);
-            if (length < 0 || length >= (ssize_t)sizeof(target) - 1) {
-                if (errorOut) *errorOut = [NSString stringWithFormat:@"Cannot inspect link %@", relative];
-                return nil;
-            }
-            WQAppsSupportHashBlob(&ctx, target, (NSUInteger)length);
         }
+        if (failure) break;
+    }
+    if (failure) {
+        if (errorOut) *errorOut = failure;
+        if (failureErrno) errno = failureErrno;
+        return nil;
     }
     unsigned char digest[CC_SHA256_DIGEST_LENGTH];
     CC_SHA256_Final(digest, &ctx);

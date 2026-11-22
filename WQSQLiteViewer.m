@@ -498,6 +498,7 @@ static BOOL wq_sqlite_bind_typed(sqlite3_stmt *stmt, int index, NSString *text, 
     WQSQLiteSnapshot *snapshot = _snapshot;
     NSString *table = _table, *knownAlias = _alias;
     BOOL aliasResolved = _aliasResolved;
+    NSNumber *lastRowid = _rowids.count == _rows.count ? _rowids.lastObject : nil;
     NSString *baseSQL = _sql;
     NSUInteger limit = _limit;
     // The page belongs to the rows shown now: a reset, a delete or an edit
@@ -505,10 +506,17 @@ static BOOL wq_sqlite_bind_typed(sqlite3_stmt *stmt, int index, NSString *text, 
     NSUInteger epoch = _loadEpoch, generation = _generation;
     dispatch_async(snapshot.queue, ^{
         NSString *alias = aliasResolved ? knownAlias : (table ? wq_sqlite_rowid_alias(snapshot.db, table) : nil);
-        // Tables page with LIMIT/OFFSET (with their rowid first, if they have
-        // one); a query (which may be a PRAGMA or EXPLAIN, and can't be
-        // wrapped) runs as typed and stops after `limit` rows.
+        // Tables with a rowid page by it ("after the last row shown", in
+        // rowid order, which is the order a plain scan gives anyway): OFFSET
+        // reads and drops every earlier row again, for each page. Other
+        // tables page with LIMIT/OFFSET; a query (which may be a PRAGMA or
+        // EXPLAIN, and can't be wrapped) runs as typed and stops after
+        // `limit` rows.
+        NSString *after = offset && lastRowid ? [NSString stringWithFormat:@" WHERE %@ > %lld", alias, lastRowid.longLongValue] : @"";
         NSString *sql = limit ? baseSQL
+            : alias && (!offset || lastRowid)
+                    ? [NSString stringWithFormat:@"SELECT %@ AS \"__wq_rowid\", * FROM %@%@ ORDER BY %@ LIMIT %lu", alias,
+                       wq_sqlite_quote_identifier(table), after, alias, (unsigned long)page]
             : alias ? [NSString stringWithFormat:@"SELECT %@ AS \"__wq_rowid\", * FROM %@ LIMIT %lu OFFSET %lu", alias,
                        wq_sqlite_quote_identifier(table), (unsigned long)page, (unsigned long)offset]
                     : [NSString stringWithFormat:@"SELECT * FROM (%@) LIMIT %lu OFFSET %lu", baseSQL, (unsigned long)page, (unsigned long)offset];
