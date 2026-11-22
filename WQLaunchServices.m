@@ -10,6 +10,15 @@
 #import "WQLocalization.h"
 
 WQ_DEFINE_LOCK(wq_ls_layout_cache_lock)
+
+// A path as the store writes it, in the form lookups use: no trailing slash
+// (iOS 26 stores one) and /private/var instead of /var. nil stays nil.
+static NSString *wq_ls_clean_path(NSString *path)
+{
+    if ([path hasSuffix:@"/"]) path = [path substringToIndex:path.length - 1];
+    if ([path hasPrefix:@"/var/"]) path = [@"/private" stringByAppendingString:path];
+    return path;
+}
 WQ_DEFINE_LOCK(wq_ls_summary_lock)
 #import "WQAccess.h"
 #import <stdlib.h>
@@ -649,8 +658,7 @@ static BOOL wq_ls_auto_layout_compute(const uint8_t *b, size_t n, size_t heap, N
     NSString *(^pathFor)(uint32_t) = ^NSString *(uint32_t ref) {
         id path = paths[@(ref >> 2)];
         if (![path isKindOfClass:NSString.class]) return nil;
-        NSString *clean = [path hasSuffix:@"/"] ? [path substringToIndex:[path length] - 1] : path;
-        if ([clean hasPrefix:@"/var/"]) clean = [@"/private" stringByAppendingString:clean];
+        NSString *clean = wq_ls_clean_path(path);
         return wq_is_data_container_path(clean) ? clean : nil;
     };
     // Container -> bundle id for one record type and bundle id offset.
@@ -788,8 +796,7 @@ static BOOL wq_ls_auto_layout_compute(const uint8_t *b, size_t n, size_t heap, N
     NSMutableDictionary<NSString *, id> *listed = [NSMutableDictionary new];
     for (id path in paths.allValues) {
         if (![path isKindOfClass:NSString.class]) continue;
-        NSString *clean = [path hasSuffix:@"/"] ? [path substringToIndex:[path length] - 1] : path;
-        if ([clean hasPrefix:@"/var/"]) clean = [@"/private" stringByAppendingString:clean];
+        NSString *clean = wq_ls_clean_path(path);
         if (wq_is_data_container_path(clean)) listed[clean] = NSNull.null;
     }
     if (containersOut) *containersOut = [listed copy];
@@ -957,8 +964,7 @@ static BOOL wq_parse_ls_store(NSData *data, NSDictionary **displayOut,
         void (^claim)(NSString *, NSString *, NSString *) = ^(NSString *path, NSString *bid, NSString *kind) {
             // iOS 26 stores container paths with a trailing slash; lookups
             // use the /private/var form without one.
-            if ([path hasSuffix:@"/"]) path = [path substringToIndex:path.length - 1];
-            if ([path hasPrefix:@"/var/"]) path = [@"/private" stringByAppendingString:path];
+            path = wq_ls_clean_path(path);
             if (!wq_is_data_container_path(path) || !wq_looks_like_bundle_id(bid) || ![path containsString:kind]) return;
             id known = layoutContainers[path];
             if (!known) layoutContainers[path] = bid;
@@ -981,8 +987,7 @@ static BOOL wq_parse_ls_store(NSData *data, NSDictionary **displayOut,
             // a localized type name where the app name would be: on iOS 26.5
             // UC Browser became "셸 스크립트" (shell script).
             NSString *cleanContainer = [container isKindOfClass:NSString.class] ? container : nil;
-            if ([cleanContainer hasSuffix:@"/"]) cleanContainer = [cleanContainer substringToIndex:cleanContainer.length - 1];
-            if ([cleanContainer hasPrefix:@"/var/"]) cleanContainer = [@"/private" stringByAppendingString:cleanContainer];
+            cleanContainer = wq_ls_clean_path(cleanContainer);
             BOOL appRecord = (cleanContainer && wq_is_data_container_path(cleanContainer) &&
                               [cleanContainer containsString:@"/Data/Application/"]) ||
                              ([appPath isKindOfClass:NSString.class] &&
@@ -994,8 +999,7 @@ static BOOL wq_parse_ls_store(NSData *data, NSDictionary **displayOut,
             if (safeDisplay && !layoutDisplay[bid]) layoutDisplay[bid] = safeDisplay;
             if (safeBundleName && !layoutBundleName[bid]) layoutBundleName[bid] = safeBundleName;
             if ([appPath isKindOfClass:NSString.class] && !layoutBundlePaths[bid]) {
-                NSString *clean = [appPath hasSuffix:@"/"] ? [appPath substringToIndex:[appPath length] - 1] : appPath;
-                if ([clean hasPrefix:@"/var/"]) clean = [@"/private" stringByAppendingString:clean];
+                NSString *clean = wq_ls_clean_path(appPath);
                 layoutBundlePaths[bid] = clean;
             }
         }

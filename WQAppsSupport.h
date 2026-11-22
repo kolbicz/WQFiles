@@ -134,6 +134,19 @@ static inline BOOL WQAppsSupportIsUnsupportedSpecial(mode_t mode)
     return S_ISSOCK(mode) || S_ISFIFO(mode) || S_ISCHR(mode) || S_ISBLK(mode);
 }
 
+// Every item below `path`, relative to it, in one fixed order: the tree
+// signatures hash items in this order, so it must not depend on the disk's.
+static inline NSArray<NSString *> *WQAppsSupportSortedRelativePaths(NSString *path)
+{
+    NSMutableArray<NSString *> *relativePaths = [NSMutableArray new];
+    @autoreleasepool {
+        for (NSString *relative in [NSFileManager.defaultManager enumeratorAtPath:path])
+            [relativePaths addObject:relative];
+    }
+    [relativePaths sortUsingSelector:@selector(compare:)];
+    return relativePaths;
+}
+
 // Deterministic SHA-256 over length-prefixed tree metadata. `includeIdentity`
 // adds inode/mtime/ctime for source-stability checks; the shape variant omits
 // them and is suitable for comparing a source with its copy. A digest keeps
@@ -164,12 +177,7 @@ static inline NSString *WQAppsSupportTreeSignatureOmitting(NSString *path, BOOL 
     }
     if (exists) *exists = YES;
 
-    NSMutableArray<NSString *> *relativePaths = [NSMutableArray new];
-    @autoreleasepool {
-        for (NSString *relative in [NSFileManager.defaultManager enumeratorAtPath:path])
-            [relativePaths addObject:relative];
-    }
-    [relativePaths sortUsingSelector:@selector(compare:)];
+    NSArray<NSString *> *relativePaths = WQAppsSupportSortedRelativePaths(path);
 
     CC_SHA256_CTX ctx;
     CC_SHA256_Init(&ctx);
@@ -265,12 +273,7 @@ static inline NSString *WQAppsSupportTreeContentSignature(NSString *path, BOOL *
     }
     if (exists) *exists = YES;
 
-    NSMutableArray<NSString *> *relativePaths = [NSMutableArray new];
-    @autoreleasepool {
-        for (NSString *relative in [NSFileManager.defaultManager enumeratorAtPath:path])
-            [relativePaths addObject:relative];
-    }
-    [relativePaths sortUsingSelector:@selector(compare:)];
+    NSArray<NSString *> *relativePaths = WQAppsSupportSortedRelativePaths(path);
 
     CC_SHA256_CTX ctx;
     CC_SHA256_Init(&ctx);

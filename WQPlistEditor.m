@@ -332,20 +332,13 @@ static void wqp_alert(UIViewController *host, NSString *title, NSString *message
             [nav popToViewController:nav.viewControllers[rootIndex - 1] animated:then == nil];
         if (then) then();
     };
-    if (!self.doc.edit.dirty) { go(); return; }
-    UIAlertController *a = wq_alert_controller(@"Discard changes?", @"Your edits to this property list have not been saved.", UIAlertControllerStyleAlert);
-    [a addAction:wq_alert_action(@"Keep Editing", UIAlertActionStyleCancel, nil)];
-    [a addAction:wq_alert_action(@"Discard", UIAlertActionStyleDestructive, ^(UIAlertAction *__unused x) {
-        [self.doc.edit discard];
-        go();
-    })];
-    [self presentViewController:a animated:YES completion:nil];
+    [self discardIfConfirmedThen:go];
 }
 
-// Home button: ask before throwing away unsaved changes.
-- (void)confirmLeaveThen:(void (^)(void))proceed
+// Runs `proceed` at once without unsaved edits, else after the user agreed
+// to throw them away.
+- (void)discardIfConfirmedThen:(void (^)(void))proceed
 {
-    if ([self blockWhileSaving]) return;
     if (!self.doc.edit.dirty) { proceed(); return; }
     UIAlertController *a = wq_alert_controller(@"Discard changes?", @"Your edits to this property list have not been saved.", UIAlertControllerStyleAlert);
     [a addAction:wq_alert_action(@"Keep Editing", UIAlertActionStyleCancel, nil)];
@@ -354,6 +347,13 @@ static void wqp_alert(UIViewController *host, NSString *title, NSString *message
         proceed();
     })];
     [self presentViewController:a animated:YES completion:nil];
+}
+
+// Home button: ask before throwing away unsaved changes.
+- (void)confirmLeaveThen:(void (^)(void))proceed
+{
+    if ([self blockWhileSaving]) return;
+    [self discardIfConfirmedThen:proceed];
 }
 
 - (void)save

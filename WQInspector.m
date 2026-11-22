@@ -161,6 +161,10 @@ static NSString *wq_inspector_folder_name(NSString *name)
     return trimmed.length ? trimmed : @"Inspector";
 }
 
+#ifdef WQ_INSPECTOR_TESTING
+BOOL wq_test_inspector_fail_final_load;   // the installed folder "doesn't load" after the swap
+#endif
+
 WQInspector *wq_inspector_install_zip(NSString *zipPath, NSString *folder, BOOL *replaced, NSString **error)
 {
     if (replaced) *replaced = NO;
@@ -215,6 +219,9 @@ WQInspector *wq_inspector_install_zip(NSString *zipPath, NSString *folder, BOOL 
             return nil;
         }
         installed = wq_inspector_load(destination, &problem);
+#ifdef WQ_INSPECTOR_TESTING
+        if (wq_test_inspector_fail_final_load) { installed = nil; problem = @"test: final load failed"; }
+#endif
         if (!installed) {
             // The new folder doesn't load after all: it goes back into the
             // stage (removed below) and the inspector from before returns.

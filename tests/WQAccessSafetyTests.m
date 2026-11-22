@@ -212,6 +212,15 @@ int main(void)
             check([WQSpreadSampleIndexes(0, 3) isEqualToArray:@[]] && [WQSpreadSampleIndexes(1, 3) isEqualToArray:@[@0]] &&
                   [WQSpreadSampleIndexes(2, 3) isEqualToArray:(@[@0, @1])] && [WQSpreadSampleIndexes(3, 3) isEqualToArray:(@[@0, @1, @2])] &&
                   [WQSpreadSampleIndexes(10, 3) isEqualToArray:(@[@0, @3, @6])], @"sample indexes never repeat (2 items: both)");
+            // "Keep Both": a renamed database takes its companions along.
+            check([WQSQLiteCompanionNameForMoved(@"db.sqlite-wal", @"db.sqlite", @"db 2.sqlite") isEqualToString:@"db 2.sqlite-wal"] &&
+                  [WQSQLiteCompanionNameForMoved(@"DB.sqlite-shm", @"db.sqlite", @"DB 2.sqlite") isEqualToString:@"DB 2.sqlite-shm"] &&
+                  [WQSQLiteCompanionNameForMoved(@"db.sqlite-journal", @"db.sqlite", @"db 3.sqlite") isEqualToString:@"db 3.sqlite-journal"],
+                  @"companions follow the database's new name");
+            check(!WQSQLiteCompanionNameForMoved(@"db.sqlite", @"db.sqlite", @"db 2.sqlite") &&
+                  !WQSQLiteCompanionNameForMoved(@"db.sqlite-wal", @"db.sqlite", nil) &&
+                  !WQSQLiteCompanionNameForMoved(@"other.sqlite-wal", @"db.sqlite", @"db 2.sqlite") &&
+                  !WQSQLiteCompanionNameForMoved(@"x", @"db.sqlite", @"db 2.sqlite"), @"the database itself and unmoved sets keep their names");
             // Update check: version from source.json, compared as numbers.
             check([WQUpdateVersionInSource(utf8(@"{\"apps\":[{\"version\":\"0.9.21\"},{\"version\":\"9\"}]}")) isEqualToString:@"0.9.21"],
                   @"update version is the first app's");

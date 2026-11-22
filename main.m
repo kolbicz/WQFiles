@@ -3918,8 +3918,8 @@ static NSString *wq_free_name_in(NSString *dir, NSString *name, NSMutableSet<NSS
             if (failedSets[set]) {
                 e = wq_sqlite_family_skipped_text(failedSets[set]);
                 ok = NO;
-            } else if (movedSets[set] && name.length > set.length) {
-                name = [movedSets[set] stringByAppendingString:[name substringFromIndex:set.length]];
+            } else if (WQSQLiteCompanionNameForMoved(name, set, movedSets[set])) {
+                name = WQSQLiteCompanionNameForMoved(name, set, movedSets[set]);
                 struct stat taken;
                 if ([claimed containsObject:name.lowercaseString] || wq_stat([dir stringByAppendingPathComponent:name], &taken)) {
                     e = wq_sqlite_family_skipped_text(movedSets[set]);
@@ -5435,6 +5435,63 @@ static void wq_check_for_update(void (^show)(NSString *version))
     [session finishTasksAndInvalidate];   // or the session lives until the app quits
 }
 
+// Shared by both start screens (new design in a tab bar, classic without).
+
+// Whether the start screen is in front with nothing over it, so an alert or
+// a pushed folder lands where the user is looking.
+static BOOL wq_start_screen_can_present(UIViewController *screen)
+{
+    if (!screen.view.window) return NO;
+    if (screen.tabBarController && screen.tabBarController.selectedViewController != screen.navigationController) return NO;
+    if (screen.navigationController && screen.navigationController.topViewController != screen) return NO;
+    UIViewController *host = screen.tabBarController ?: screen.navigationController ?: screen;
+    if (host.presentedViewController) return NO;
+    return UIApplication.sharedApplication.applicationState == UIApplicationStateActive;
+}
+
+// Each set of warnings once per build, so the same notice doesn't repeat on
+// every launch. YES when the notice is shown; `then` runs after its OK.
+static BOOL wq_start_screen_show_warnings(UIViewController *screen, NSArray<WQHealthCheck *> *checks, void (^then)(void))
+{
+    NSMutableArray<NSString *> *lines = [NSMutableArray new];
+    for (WQHealthCheck *c in checks)
+        if (c.state == WQHealthWarning) [lines addObject:[NSString stringWithFormat:@"%@: %@", c.title, c.detail]];
+    NSString *text = [lines componentsJoinedByString:@"\n\n"];
+    NSString *key = [NSString stringWithFormat:@"%@|%@", NSBundle.mainBundle.infoDictionary[@"CFBundleVersion"], text];
+    NSUserDefaults *defaults = NSUserDefaults.standardUserDefaults;
+    if ([[defaults stringForKey:@"WQHealthWarned"] isEqualToString:key]) return NO;
+    [defaults setObject:key forKey:@"WQHealthWarned"];
+    UIAlertController *alert = wq_alert_controller(@"Not everything works here", text, UIAlertControllerStyleAlert);
+    [alert addAction:wq_alert_action(@"OK", UIAlertActionStyleCancel, ^(UIAlertAction *__unused a) { if (then) then(); })];
+    UIViewController *host = screen.tabBarController ?: screen.navigationController ?: screen;
+    while (host.presentedViewController) host = host.presentedViewController;
+    [host presentViewController:alert animated:YES completion:nil];
+    return YES;
+}
+
+// Reopens the folder that was in front when WQ Files was last used, but only
+// while the start screen is still idle (if the user already went somewhere,
+// they're not interrupted).
+static void wq_start_screen_reopen(UIViewController *screen, NSDictionary *last)
+{
+    NSString *path = last[@"path"];
+    if (![path isKindOfClass:NSString.class]) return;
+    __weak UIViewController *weakScreen = screen;
+    dispatch_async(wq_io(), ^{
+        struct stat st;
+        BOOL folder = wq_stat(path, &st) && S_ISDIR(st.st_mode);
+        dispatch_async(dispatch_get_main_queue(), ^{
+            UIViewController *front = weakScreen;
+            if (!folder) { wq_log(@"reopen: %@ is gone", path); return; }
+            if (!front || !wq_start_screen_can_present(front)) return;
+            WQDirViewController *dir = [[WQDirViewController alloc] initWithPath:path
+                title:[last[@"title"] isKindOfClass:NSString.class] ? last[@"title"] : path.lastPathComponent];
+            dir.readOnly = [last[@"readOnly"] boolValue];
+            [front.navigationController pushViewController:dir animated:YES];
+        });
+    });
+}
+
 static BOOL wq_startup_checked;
 // The last access check failed. A start screen built later (New Design
 // switched) didn't run the check itself and must not show "passed".
@@ -6236,12 +6293,7 @@ static void wq_apply_design(void);
 
 - (BOOL)healthFailureCanPresent
 {
-    if (!self.view.window) return NO;
-    if (self.tabBarController && self.tabBarController.selectedViewController != self.navigationController) return NO;
-    if (self.navigationController && self.navigationController.topViewController != self) return NO;
-    UIViewController *host = self.tabBarController ?: self.navigationController ?: self;
-    if (host.presentedViewController) return NO;
-    return UIApplication.sharedApplication.applicationState == UIApplicationStateActive;
+    return wq_start_screen_can_present(self);
 }
 
 - (void)presentPendingHealthFailure
@@ -6282,41 +6334,14 @@ static void wq_apply_design(void);
 // YES when the notice is shown; `then` runs after its OK.
 - (BOOL)showHealthWarnings:(NSArray<WQHealthCheck *> *)checks then:(void (^)(void))then
 {
-    NSMutableArray<NSString *> *lines = [NSMutableArray new];
-    for (WQHealthCheck *c in checks)
-        if (c.state == WQHealthWarning) [lines addObject:[NSString stringWithFormat:@"%@: %@", c.title, c.detail]];
-    NSString *text = [lines componentsJoinedByString:@"\n\n"];
-    NSString *key = [NSString stringWithFormat:@"%@|%@", NSBundle.mainBundle.infoDictionary[@"CFBundleVersion"], text];
-    NSUserDefaults *defaults = NSUserDefaults.standardUserDefaults;
-    if ([[defaults stringForKey:@"WQHealthWarned"] isEqualToString:key]) return NO;
-    [defaults setObject:key forKey:@"WQHealthWarned"];
-    UIAlertController *alert = wq_alert_controller(@"Not everything works here", text, UIAlertControllerStyleAlert);
-    [alert addAction:wq_alert_action(@"OK", UIAlertActionStyleCancel, ^(UIAlertAction *__unused a) { if (then) then(); })];
-    UIViewController *host = self.tabBarController ?: self.navigationController ?: self;
-    while (host.presentedViewController) host = host.presentedViewController;
-    [host presentViewController:alert animated:YES completion:nil];
-    return YES;
+    return wq_start_screen_show_warnings(self, checks, then);
 }
 
 - (void)reopenLastFolder
 {
     NSDictionary *last = _reopenFolder;
     _reopenFolder = nil;
-    if (!last) return;
-    NSString *path = last[@"path"];
-    if (![path isKindOfClass:NSString.class]) return;
-    __weak typeof(self) weakSelf = self;
-    dispatch_async(wq_io(), ^{
-        struct stat st;
-        BOOL folder = wq_stat(path, &st) && S_ISDIR(st.st_mode);
-        dispatch_async(dispatch_get_main_queue(), ^{
-            if (!folder || ![weakSelf healthFailureCanPresent]) return;
-            WQDirViewController *dir = [[WQDirViewController alloc] initWithPath:path
-                title:[last[@"title"] isKindOfClass:NSString.class] ? last[@"title"] : path.lastPathComponent];
-            dir.readOnly = [last[@"readOnly"] boolValue];
-            [weakSelf.navigationController pushViewController:dir animated:YES];
-        });
-    });
+    wq_start_screen_reopen(self, last);
 }
 
 // MARK: Update check
@@ -6866,20 +6891,7 @@ static NSString *const kWQTroubleshootingFooter =
 {
     NSDictionary *last = _reopenFolder;
     _reopenFolder = nil;
-    if (!last) return;
-    NSString *path = last[@"path"];
-    dispatch_async(wq_io(), ^{
-        struct stat st;
-        BOOL folder = wq_stat(path, &st) && S_ISDIR(st.st_mode);
-        dispatch_async(dispatch_get_main_queue(), ^{
-            if (!folder) { wq_log(@"reopen: %@ is gone", path); return; }
-            if (![self healthFailureCanPresent]) return;
-            WQDirViewController *dir = [[WQDirViewController alloc] initWithPath:path
-                title:[last[@"title"] isKindOfClass:NSString.class] ? last[@"title"] : path.lastPathComponent];
-            dir.readOnly = [last[@"readOnly"] boolValue];
-            [self.navigationController pushViewController:dir animated:YES];
-        });
-    });
+    wq_start_screen_reopen(self, last);
 }
 
 // Check for Updates: at most every 12 hours, one request for the public
@@ -6916,10 +6928,7 @@ static NSString *const kWQTroubleshootingFooter =
 // nothing (alert, sheet, scan window) is presented.
 - (BOOL)healthFailureCanPresent
 {
-    UIViewController *host = self.navigationController ?: self;
-    if (!self.view.window || host.presentedViewController) return NO;
-    if (self.navigationController && self.navigationController.topViewController != self) return NO;
-    return UIApplication.sharedApplication.applicationState == UIApplicationStateActive;
+    return wq_start_screen_can_present(self);
 }
 
 - (void)presentPendingHealthFailure
@@ -6963,20 +6972,7 @@ static NSString *const kWQTroubleshootingFooter =
 // YES when the notice is shown; `then` runs after its OK.
 - (BOOL)showHealthWarnings:(NSArray<WQHealthCheck *> *)checks then:(void (^)(void))then
 {
-    NSMutableArray *lines = [NSMutableArray new];
-    for (WQHealthCheck *c in checks)
-        if (c.state == WQHealthWarning) [lines addObject:[NSString stringWithFormat:@"%@: %@", c.title, c.detail]];
-    NSString *text = [lines componentsJoinedByString:@"\n\n"];
-    NSString *key = [NSString stringWithFormat:@"%@|%@", NSBundle.mainBundle.infoDictionary[@"CFBundleVersion"], text];
-    NSUserDefaults *defaults = NSUserDefaults.standardUserDefaults;
-    if ([[defaults stringForKey:@"WQHealthWarned"] isEqualToString:key]) return NO;
-    [defaults setObject:key forKey:@"WQHealthWarned"];
-    UIAlertController *alert = wq_alert_controller(@"Not everything works here", text, UIAlertControllerStyleAlert);
-    [alert addAction:wq_alert_action(@"OK", UIAlertActionStyleCancel, ^(UIAlertAction *__unused a) { if (then) then(); })];
-    UIViewController *host = self.navigationController ?: self;
-    while (host.presentedViewController) host = host.presentedViewController;
-    [host presentViewController:alert animated:YES completion:nil];
-    return YES;
+    return wq_start_screen_show_warnings(self, checks, then);
 }
 
 // "by kolbicz" with GitHub and X links, under the last section.

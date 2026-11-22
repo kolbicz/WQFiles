@@ -333,6 +333,18 @@ static inline BOOL WQVersionIsNewer(NSString *candidate, NSString *mine)
     return candidate.length && [candidate compare:mine options:NSNumericSearch] == NSOrderedDescending;
 }
 
+// Importing with "Keep Both": the name a -wal/-shm/-journal file must take
+// when its database (same import, set `base`) was imported as `movedName`
+// instead ("db.sqlite" -> "db 2.sqlite" gives "db 2.sqlite-wal"). nil when
+// `name` is the database itself or the database kept its name: then `name`
+// is used as it is.
+static inline NSString *WQSQLiteCompanionNameForMoved(NSString *name, NSString *base, NSString *movedName)
+{
+    if (!movedName.length || !base.length || name.length <= base.length) return nil;
+    if ([[name substringToIndex:base.length] caseInsensitiveCompare:base] != NSOrderedSame) return nil;
+    return [movedName stringByAppendingString:[name substringFromIndex:base.length]];
+}
+
 // Up to `samples` indexes spread over `count` items, each once, in order
 // (2 of 2 gives 0 and 1; 3 of 10 gives 0, 3 and 6).
 static inline NSArray<NSNumber *> *WQSpreadSampleIndexes(NSUInteger count, NSUInteger samples)

@@ -4,6 +4,8 @@
 #import "../WQArchive.h"
 #include <stdlib.h>
 
+extern BOOL wq_test_inspector_fail_final_load;
+
 static void check(BOOL ok, NSString *name)
 {
     if (!ok) { fprintf(stderr, "FAIL: %s\n", name.UTF8String); exit(1); }
@@ -141,6 +143,23 @@ int main(void)
         check(!wq_inspector_install_zip(plainZip, inspectors, NULL, &error) && error.length, @"a ZIP without manifest.json is refused");
         NSArray *left = [fm contentsOfDirectoryAtPath:inspectors error:nil];
         check(left.count == 2 && ![[left componentsJoinedByString:@","] containsString:@".wq-install"], @"refused installs leave nothing behind");
+
+        // A replacement that doesn't load once it is in place: the inspector
+        // from before comes back, and nothing else stays.
+        NSString *newer = makeInspector(@"zip-src2/Pretty Thing", @{@"name": @"Pretty/Thing", @"api": @1, @"extensions": @[@"md"]},
+                                        @"function inspect(i){ return {sections:[{text: 'newer'}]} }", nil);
+        NSString *newerZip = [base stringByAppendingPathComponent:@"newer.zip"];
+        check(wq_zip_write(@[newer], newerZip, wq_archive_posix_io(), nil, nil, NULL, &error), @"make the replacement ZIP");
+        wq_test_inspector_fail_final_load = YES;
+        check(!wq_inspector_install_zip(newerZip, inspectors, &replaced, &error) && error.length, @"a replacement that doesn't load is refused");
+        wq_test_inspector_fail_final_load = NO;
+        WQInspector *kept = nil;
+        for (WQInspector *each in wq_inspectors_in(inspectors, NULL))
+            if ([each.folder.lastPathComponent isEqualToString:@"Pretty-Thing"]) kept = each;
+        check(kept && [kept.extensions isEqualToArray:@[@"txt"]], @"the inspector from before is back in place");
+        left = [fm contentsOfDirectoryAtPath:inspectors error:nil];
+        check(left.count == 2 && ![[left componentsJoinedByString:@","] containsString:@".wq-install"], @"the failed replacement leaves nothing behind");
+        check(wq_inspector_install_zip(newerZip, inspectors, &replaced, &error) && replaced, @"the replacement installs once it loads");
 
         [NSFileManager.defaultManager removeItemAtPath:base error:nil];
         printf("All inspector tests passed.\n");
