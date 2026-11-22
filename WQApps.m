@@ -1283,7 +1283,7 @@ static void WQAppScanWatch(WQScanCancellation *cancellation, NSUInteger lastSeri
         [self backUp:app then:nil];
     })];
     [sheet addAction:wq_alert_action(WQLocalized(@"Import as Backup…"), UIAlertActionStyleDefault, ^(UIAlertAction *__unused a) {
-        [self pickImportFor:app];
+        [self pickImportFor:app from:[tableView cellForRowAtIndexPath:indexPath]];
     })];
     NSArray *backups = app.backups;
     NSString *latest = backups.firstObject[@"path"];
@@ -1326,18 +1326,45 @@ static void WQAppScanWatch(WQScanCancellation *cancellation, NSUInteger lastSeri
 // Import as Backup: a folder or ZIP with Documents and/or Library (from the
 // Files app, another device's shared backup or another tool, such as an Apps
 // Manager .adbk) becomes a normal, verified backup of this app, ready to restore.
-- (void)pickImportFor:(WQAppItem *)app
+- (void)pickImportFor:(WQAppItem *)app from:(UIView *)source
+{
+    // Files and folders are asked for separately: one picker for both left
+    // nothing selectable on some devices (issue #72).
+    UIAlertController *ask = wq_alert_controller(WQLocalized(@"Import as Backup…"),
+        WQLocalized(@"Choose a ZIP or Apps Manager .adbk file, or a folder that holds Documents or Library."),
+        UIAlertControllerStyleActionSheet);
+    [ask addAction:wq_alert_action(WQLocalized(@"File"), UIAlertActionStyleDefault, ^(UIAlertAction *__unused a) {
+        [self presentImportPickerFor:app folder:NO];
+    })];
+    [ask addAction:wq_alert_action(WQLocalized(@"Folder"), UIAlertActionStyleDefault, ^(UIAlertAction *__unused a) {
+        [self presentImportPickerFor:app folder:YES];
+    })];
+    [ask addAction:wq_alert_action(WQLocalized(@"Cancel"), UIAlertActionStyleCancel, nil)];
+    ask.popoverPresentationController.sourceView = source ?: self.view;
+    ask.popoverPresentationController.sourceRect = (source ?: self.view).bounds;
+    [self presentViewController:ask animated:YES completion:nil];
+}
+
+- (void)presentImportPickerFor:(WQAppItem *)app folder:(BOOL)folder
 {
     _importApp = app;
-    NSMutableArray<UTType *> *types = [NSMutableArray arrayWithObjects:UTTypeFolder, UTTypeZIP, nil];
-    // Info.plist imports .adbk as a ZIP; this also covers a device where
-    // another app declares the extension differently.
-    UTType *adbk = [UTType typeWithFilenameExtension:@"adbk"];
-    if (adbk && ![types containsObject:adbk]) [types addObject:adbk];
-    UIDocumentPickerViewController *picker = [[UIDocumentPickerViewController alloc]
-        initForOpeningContentTypes:types asCopy:NO];
+    UIDocumentPickerViewController *picker;
+    if (folder) {
+        // A folder can't be handed over as a copy; it is read in place.
+        picker = [[UIDocumentPickerViewController alloc] initForOpeningContentTypes:@[UTTypeFolder] asCopy:NO];
+    } else {
+        // Info.plist imports .adbk as a ZIP. Any other file can be chosen
+        // too, so a file iOS gives another type on this device isn't locked
+        // out; one that is no ZIP is refused by the import.
+        NSMutableArray<UTType *> *types = [NSMutableArray arrayWithObject:UTTypeZIP];
+        UTType *adbk = [UTType typeWithFilenameExtension:@"adbk"];
+        if (adbk && ![types containsObject:adbk]) [types addObject:adbk];
+        [types addObject:UTTypeData];
+        picker = [[UIDocumentPickerViewController alloc] initForOpeningContentTypes:types asCopy:YES];
+    }
     picker.delegate = self;
     picker.allowsMultipleSelection = NO;
+    wq_log(@"import backup %@: asking for a %@", app.bundleID, folder ? @"folder" : @"file");
     [self presentViewController:picker animated:YES completion:nil];
 }
 
@@ -1345,12 +1372,27 @@ static void WQAppScanWatch(WQScanCancellation *cancellation, NSUInteger lastSeri
 {
     WQAppItem *app = _importApp;
     _importApp = nil;
+    wq_log(@"import backup %@: the picker returned %@", app.bundleID ?: @"(no app)", urls.firstObject.lastPathComponent ?: @"nothing");
     if (app && urls.firstObject) [self importBackupFrom:urls.firstObject for:app confirmedDeclarations:nil];
 }
 
 - (void)documentPickerWasCancelled:(UIDocumentPickerViewController *)controller
 {
+    wq_log(@"import backup %@: the picker was cancelled", _importApp.bundleID ?: @"(no app)");
     _importApp = nil;
+}
+
+// A picked file arrives as a copy in the temporary folder, and a backup ZIP
+// can be large: the copy goes as soon as the import is settled. A folder is
+// read in place and never touched.
+static void wq_import_discard_copy(NSURL *url)
+{
+    NSString *tmp = NSTemporaryDirectory().stringByStandardizingPath;
+    NSString *path = url.path.stringByStandardizingPath;
+    if (!tmp.length || ![path hasPrefix:[tmp stringByAppendingString:@"/"]]) return;
+    BOOL isDir = NO;
+    if ([NSFileManager.defaultManager fileExistsAtPath:path isDirectory:&isDir] && !isDir)
+        [NSFileManager.defaultManager removeItemAtPath:path error:nil];
 }
 
 // `confirmed`: the declared bundle IDs the user already agreed to import
@@ -1416,6 +1458,7 @@ static void WQAppScanWatch(WQScanCancellation *cancellation, NSUInteger lastSeri
         if (coordinationError && !error && !dest) error = coordinationError.localizedDescription;
         if (scoped) [url stopAccessingSecurityScopedResource];
         [fm removeItemAtPath:work error:nil];
+        if (dest || error || !declared.count) wq_import_discard_copy(url);   // otherwise the question below decides
         wq_log(@"import backup %@ from %@ (declares %@): %@%@", bundleID, url.lastPathComponent,
                declared.count ? [declared componentsJoinedByString:@", "] : @"nothing",
                dest ? dest.lastPathComponent : (error ?: @"needs confirmation"),
@@ -1439,7 +1482,9 @@ static void WQAppScanWatch(WQScanCancellation *cancellation, NSUInteger lastSeri
                     : WQLocalizedFormat(@"This data names more than one app (%@). Importing it as a backup of %@ (%@) and restoring it can break the app.",
                                         names, app.name, bundleID);
                 UIAlertController *ask = wq_alert_controller(@"Different app?", text, UIAlertControllerStyleAlert);
-                [ask addAction:wq_alert_action(@"Cancel", UIAlertActionStyleCancel, nil)];
+                [ask addAction:wq_alert_action(@"Cancel", UIAlertActionStyleCancel, ^(UIAlertAction *__unused a) {
+                    dispatch_async(wq_io(), ^{ wq_import_discard_copy(url); });
+                })];
                 [ask addAction:wq_alert_action(@"Import Anyway", UIAlertActionStyleDestructive, ^(UIAlertAction *__unused a) {
                     [self importBackupFrom:url for:app confirmedDeclarations:declared];
                 })];

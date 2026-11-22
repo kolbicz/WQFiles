@@ -1154,3 +1154,4 @@
 "Allow Shortcuts to Change Files" = "단축어가 파일을 변경하도록 허용";
 "Shortcuts may not change files. Turn on Allow Shortcuts to Change Files in the settings of WQ Files." = "단축어는 파일을 변경할 수 없습니다. WQ Files 설정에서 ‘단축어가 파일을 변경하도록 허용’을 켜세요.";
 "Allow Shortcuts to Change Files: WQ Files adds actions to the Shortcuts app. Listing a folder and getting a file always work. When on, shortcuts and automations can also copy, move, rename, save and delete files, clean an app's caches and back up an app, without asking each time. Deleting and cleaning also need Allow Deleting." = "단축어가 파일을 변경하도록 허용: WQ Files가 단축어 앱에 동작을 추가합니다. 폴더 목록 보기와 파일 가져오기는 항상 작동합니다. 켜면 단축어와 자동화가 매번 묻지 않고 파일을 복사, 이동, 이름 변경, 저장, 삭제하고 앱의 캐시를 정리하며 앱을 백업할 수도 있습니다. 삭제와 정리에는 ‘삭제 허용’도 필요합니다.";
+"Choose a ZIP or Apps Manager .adbk file, or a folder that holds Documents or Library." = "ZIP 또는 Apps Manager .adbk 파일, 혹은 Documents나 Library가 들어 있는 폴더를 선택하세요.";
