@@ -1216,6 +1216,12 @@ static NSString *WQCacheSelectionKey(WQCacheItem *item)
                 [weakSelf openFolder:caches.stringByDeletingLastPathComponent.stringByDeletingLastPathComponent title:item.name];
             }]];
         }
+        if (item.bundleID.length) {
+            NSString *bundleID = item.bundleID;
+            [actions insertObject:[UIAction actionWithTitle:WQLocalizedNullable(@"Copy Bundle ID") image:[UIImage systemImageNamed:@"tag"]
+                                                 identifier:nil handler:^(UIAction *__unused a) { UIPasteboard.generalPasteboard.string = bundleID; }]
+                          atIndex:0];
+        }
         return [UIMenu menuWithTitle:item.name children:actions];
     }];
 }
