@@ -457,6 +457,8 @@ https://raw.githubusercontent.com/kolbicz/WQFiles/main/source.json
 
 Or download `WQFiles.ipa` from [Releases](https://github.com/kolbicz/WQFiles/releases) and sign it yourself.
 
+WQ Files is also on **FlekStore**: [flekstore.com/WQFiles](https://flekstore.com/WQFiles).
+
 ## Signing: the App Group
 
 WQ Files needs an **App Group** to work: worse_query asks for access through
