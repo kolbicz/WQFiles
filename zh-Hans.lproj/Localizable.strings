@@ -1155,3 +1155,4 @@
 "Shortcuts may not change files. Turn on Allow Shortcuts to Change Files in the settings of WQ Files." = "快捷指令不能更改文件。请在 WQ Files 的设置中打开“允许快捷指令更改文件”。";
 "Allow Shortcuts to Change Files: WQ Files adds actions to the Shortcuts app. Listing a folder and getting a file always work. When on, shortcuts and automations can also copy, move, rename, save and delete files, clean an app's caches and back up an app, without asking each time. Deleting and cleaning also need Allow Deleting." = "允许快捷指令更改文件：WQ Files 会向“快捷指令”App 添加操作。列出文件夹和获取文件始终可用。打开后，快捷指令和自动化还可以拷贝、移动、重命名、存储和删除文件，清理某个应用的缓存以及备份某个应用，且不会每次询问。删除和清理还需要打开“允许删除”。";
 "Choose a ZIP or Apps Manager .adbk file, or a folder that holds Documents or Library." = "选择 ZIP 或 Apps Manager 的 .adbk 文件，或包含 Documents 或 Library 的文件夹。";
+"No app with this identifier was found. Use Copy Bundle ID in Apps or Cache Cleaner to get it." = "未找到使用此标识符的 App。请在 App 或 缓存清理 中使用“复制 Bundle ID”获取。";
