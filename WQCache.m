@@ -16,6 +16,7 @@
 
 #import <errno.h>
 #import <sys/stat.h>
+#import <sys/xattr.h>
 
 #pragma mark - Cache cleaner
 
@@ -267,8 +268,22 @@ NSDictionary *wq_cache_custom_target_for_path(NSString *path)
     NSString *container = nil;
     NSString *relative = WQCacheCustomRelativeForPath(path, &container);
     if (!relative) return nil;
-    for (NSDictionary *t in wq_cache_custom_targets())
-        if ([t[@"path"] isEqualToString:relative] && [t[@"container"] isEqual:container]) return t;
+    NSArray<NSDictionary *> *sameRelative = [wq_cache_custom_targets() filteredArrayUsingPredicate:
+        [NSPredicate predicateWithBlock:^BOOL(NSDictionary *t, NSDictionary *__unused b) { return [t[@"path"] isEqualToString:relative]; }]];
+    for (NSDictionary *t in sameRelative)
+        if ([t[@"container"] isEqual:container]) return t;
+    if (!sameRelative.count) return nil;
+    // A reinstalled app has a new folder: the entry is the app's, so it is
+    // found by the app's identifier (as the scan does). Called for menus on
+    // the main thread: only what answers at once, no access request.
+    char buf[512];
+    ssize_t len = getxattr(container.fileSystemRepresentation, "com.apple.containermanager.identifier", buf, sizeof(buf) - 1, 0, 0);
+    NSString *bundle = nil;
+    if (len > 0) { buf[len] = 0; bundle = [NSString stringWithUTF8String:buf]; }
+    if (!bundle.length && wq_display_names_loaded()) bundle = wq_bundle_id_for_container(container);
+    if (!bundle.length) return nil;
+    for (NSDictionary *t in sameRelative)
+        if ([t[@"bundle"] isEqualToString:bundle]) return t;
     return nil;
 }
 
