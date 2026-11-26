@@ -446,6 +446,8 @@ and only change what you understand.
 <a href="https://altdirect.app/?url=https://raw.githubusercontent.com/kolbicz/WQFiles/main/source.json"><img src="https://altdirect.app/assets/png/AltSource_Blue.png" width="200"></a>
 &nbsp;
 <a href="https://github.com/kolbicz/WQFiles/releases/latest/download/WQFiles.ipa"><img src="https://altdirect.app/assets/png/Download_Blue.png" width="200"></a>
+&nbsp;
+<a href="https://flekstore.com/WQFiles"><img src="screenshots/flekstore-badge.png" width="200" alt="Install from FlekSt0re"></a>
 </h3>
 
 Tap **Add AltSource** on your iPhone to add the source in AltStore, SideStore,
@@ -457,7 +459,7 @@ https://raw.githubusercontent.com/kolbicz/WQFiles/main/source.json
 
 Or download `WQFiles.ipa` from [Releases](https://github.com/kolbicz/WQFiles/releases) and sign it yourself.
 
-WQ Files is also on **FlekStore**: [flekstore.com/WQFiles](https://flekstore.com/WQFiles).
+**Install from FlekSt0re** opens WQ Files on [FlekStore](https://flekstore.com/WQFiles).
 
 ## Signing: the App Group
 
