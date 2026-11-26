@@ -440,7 +440,7 @@ and only change what you understand.
   extension the database doesn't list), the folder stays browsable but cannot
   be backed up or cleared until identity is available.
 
-## Install with AltStore or SideStore
+## Install with AltStore, SideStore or FlekStore
 
 <h3 align="center">
 <a href="https://altdirect.app/?url=https://raw.githubusercontent.com/kolbicz/WQFiles/main/source.json"><img src="https://altdirect.app/assets/png/AltSource_Blue.png" width="200"></a>
