@@ -149,5 +149,5 @@ else
 fi
 plutil -lint Info.plist entitlements.plist | tee "$OUT/plist-lint.log"
 bash -n build.sh tests/run_all_tests.sh tests/run_tests.sh tests/run_apps_tests.sh \
-    tests/run_access_safety_tests.sh tests/run_hex_helpers_tests.sh tests/run_plist_tests.sh tests/run_launchservices_tests.sh tests/run_localization_tests.sh
+    tests/run_access_safety_tests.sh tests/run_hex_helpers_tests.sh tests/run_plist_tests.sh tests/run_launchservices_tests.sh tests/run_localization_tests.sh tests/run_scan_ui_tests.sh
 printf '\nAll requested regression suites passed. Logs retained in: %s\n' "$OUT"

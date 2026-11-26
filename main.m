@@ -6457,6 +6457,13 @@ static NSString *const kWQTroubleshootingFooter =
 {
     [super viewWillAppear:animated];
     [self.tableView reloadData];
+    [self refreshSummaries];
+}
+
+// The Sharing Password and Inspectors rows show a state that is read off the
+// main thread: at every appearance, and after the password was edited.
+- (void)refreshSummaries
+{
     __weak typeof(self) weakSelf = self;
     dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
         NSString *password = WQLocalized(wq_sharing_password() ? @"Fixed" : @"Random each time");
@@ -6603,8 +6610,8 @@ static NSString *const kWQTroubleshootingFooter =
     if (indexPath.row == 0) {
         [self.navigationController pushViewController:[WQLanguageViewController new] animated:YES];
     } else if (indexPath.row == 1) {
-        __weak UITableView *table = tableView;
-        wq_edit_sharing_password(self, ^{ [table reloadRowsAtIndexPaths:@[indexPath] withRowAnimation:UITableViewRowAnimationNone]; });
+        __weak typeof(self) weakSelf = self;
+        wq_edit_sharing_password(self, ^{ [weakSelf refreshSummaries]; });
     } else if (indexPath.row == 2) {
         wq_open_inspectors_folder(self.navigationController);
     } else if (indexPath.row == 3) {

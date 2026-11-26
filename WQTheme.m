@@ -561,7 +561,7 @@ typedef NS_ENUM(NSInteger, WQThemeSection) { WQThemeSectionThemes, WQThemeSectio
     // An exported theme sits in its own temporary folder: gone once shared
     // or cancelled (the launch sweep catches what a kill leaves).
     NSString *exportDir = file.path.stringByDeletingLastPathComponent;
-    if ([exportDir.lastPathComponent hasPrefix:@"WQTheme-"] && [exportDir hasPrefix:NSTemporaryDirectory().stringByStandardizingPath]) {
+    if ([exportDir.lastPathComponent hasPrefix:@"WQTheme-"] && [exportDir.stringByStandardizingPath hasPrefix:NSTemporaryDirectory().stringByStandardizingPath]) {
         share.completionWithItemsHandler = ^(UIActivityType __unused type, BOOL __unused completed, NSArray *__unused items, NSError *__unused error) {
             [NSFileManager.defaultManager removeItemAtPath:exportDir error:nil];
         };

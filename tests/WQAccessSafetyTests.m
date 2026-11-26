@@ -224,6 +224,10 @@ int main(void)
             // Update check: version from source.json, compared as numbers.
             check([WQUpdateVersionInSource(utf8(@"{\"apps\":[{\"version\":\"0.9.21\"},{\"version\":\"9\"}]}")) isEqualToString:@"0.9.21"],
                   @"update version is the first app's");
+            check([WQUpdateVersionInSource(utf8(@"{\"apps\":[{\"name\":\"x\",\"versions\":[{\"version\":\"0.9.30\",\"buildVersion\":\"115\"},{\"version\":\"0.9.20\"}]}]}")) isEqualToString:@"0.9.30"] &&
+                  !WQUpdateVersionInSource(utf8(@"{\"apps\":[{\"versions\":[]}]}")) && !WQUpdateVersionInSource(utf8(@"{\"apps\":[{\"versions\":[{\"version\":3}]}]}")) &&
+                  !WQUpdateVersionInSource(utf8(@"{\"apps\":[{\"versions\":\"1.0\"}]}")),
+                  @"update version is the newest entry of the published source format");
             check(!WQUpdateVersionInSource(utf8(@"{\"apps\":[]}")) && !WQUpdateVersionInSource(utf8(@"[1]")) && !WQUpdateVersionInSource(utf8(@"x")) &&
                   !WQUpdateVersionInSource(utf8(@"{\"apps\":[{\"version\":7}]}")) && !WQUpdateVersionInSource([NSData data]) &&
                   !WQUpdateVersionInSource(utf8(@"{\"apps\":[{\"version\":\"1.2.3.4.5.6.7.8.9.10.11\"}]}")), @"anything else in source.json gives no version");

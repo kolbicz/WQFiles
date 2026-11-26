@@ -315,14 +315,20 @@ static inline BOOL WQCacheSwapBegin(int library, NSString *target)
 }
 
 // The newest version named by the AltStore source (source.json): the first
-// app's "version", a short string. nil for anything else.
+// app's newest entry, "versions"[0]."version" (the format the source is
+// published in), or its own "version" where a source has that instead. A
+// short string; nil for anything else.
 static inline NSString *WQUpdateVersionInSource(NSData *data)
 {
     if (!data.length) return nil;
     id json = [NSJSONSerialization JSONObjectWithData:data options:0 error:nil];
     id apps = [json isKindOfClass:NSDictionary.class] ? json[@"apps"] : nil;
     id app = [apps isKindOfClass:NSArray.class] && [apps count] ? [apps firstObject] : nil;
-    id version = [app isKindOfClass:NSDictionary.class] ? app[@"version"] : nil;
+    if (![app isKindOfClass:NSDictionary.class]) return nil;
+    id versions = app[@"versions"];
+    id newest = [versions isKindOfClass:NSArray.class] && [versions count] ? [versions firstObject] : nil;
+    id version = [newest isKindOfClass:NSDictionary.class] ? newest[@"version"] : nil;
+    if (![version isKindOfClass:NSString.class]) version = app[@"version"];
     if (![version isKindOfClass:NSString.class] || ![version length] || [version length] > 20) return nil;
     return version;
 }

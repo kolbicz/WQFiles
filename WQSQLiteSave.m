@@ -7,6 +7,9 @@
 #import "WQAccess.h"
 #import "WQLocalization.h"
 #include <sys/stat.h>
+#include <unistd.h>
+#include <errno.h>
+#include <string.h>
 
 static NSString *wq_sqlite_side(NSString *path, NSString *suffix) { return [path stringByAppendingString:suffix]; }
 
@@ -227,12 +230,29 @@ BOOL wq_sqlite_restore_sidecars_possible(NSString *original, NSString *backup, N
 BOOL wq_sqlite_restore_sidecars(NSString *original, NSString *backup, NSMutableArray<NSString *> *units, NSString **error)
 {
     if (!wq_sqlite_is_database_file(backup)) return YES;
-    NSString *dir = nil, *empty = nil;
+    NSString *dir = nil, *empty = nil, *createdWal = nil;
     BOOL ok = YES;
     for (NSString *suffix in @[@"-wal", @"-shm"]) {
         NSString *live = wq_sqlite_side(original, suffix);
         struct stat st;
-        if (!wq_stat(live, &st)) continue;              // none: nothing newer on top
+        if (!wq_stat(live, &st)) {
+            // None: nothing newer on top. But a -wal that was backed up with
+            // the database (both deleted together) holds its latest changes:
+            // without it the database comes back incomplete. A -shm is
+            // rebuilt by SQLite and stays out.
+            NSString *saved = wq_sqlite_side(backup, suffix);
+            struct stat ss;
+            if ([suffix isEqualToString:@"-wal"] && wq_stat(saved, &ss) && S_ISREG(ss.st_mode) && ss.st_size > 0) {
+                NSString *createError = nil;
+                if (!wq_create_file_from(live, saved, &createError)) {
+                    ok = wq_sqlite_fail(error, WQLocalizedFormat(@"%@ could not be reset: %@", live.lastPathComponent, createError ?: @"?"));
+                    break;
+                }
+                createdWal = live;
+                wq_log(@"restore %@: %@ restored with it from the backup", original.lastPathComponent, suffix);
+            }
+            continue;
+        }
         if (!S_ISREG(st.st_mode)) {
             ok = wq_sqlite_fail(error, WQLocalizedFormat(@"%@ is not a regular file, so the restored database could open with other data. Remove it and restore again.", live.lastPathComponent));
             break;
@@ -259,5 +279,9 @@ BOOL wq_sqlite_restore_sidecars(NSString *original, NSString *backup, NSMutableA
                source == empty ? @"emptied" : @"restored from the backup", unit.lastPathComponent ?: @"?");
     }
     if (dir) [NSFileManager.defaultManager removeItemAtPath:dir error:nil];
+    // The caller takes the database out again on a failure: the -wal put
+    // next to it here must not stay behind for another database to read.
+    if (!ok && createdWal && unlink(createdWal.fileSystemRepresentation) != 0)
+        wq_log(@"restore %@: %@ could not be removed again (%s)", original.lastPathComponent, createdWal.lastPathComponent, strerror(errno));
     return ok;
 }

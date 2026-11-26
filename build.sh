@@ -52,6 +52,17 @@ fail() {
     exit 1
 }
 
+# Every action WQShortcuts.swift declares has to be in the metadata: a file
+# that is there but lists nothing gives an app without actions.
+check_shortcut_actions() {
+    local metadata="$1/Metadata.appintents/extract.actionsdata" intent count=0
+    for intent in $(sed -n 's/^struct \([A-Za-z0-9_]*\): AppIntent.*/\1/p' "$ROOT/WQShortcuts.swift"); do
+        grep -q "\"$intent\"" "$metadata" || fail "the Shortcuts metadata does not list $intent"
+        count=$((count + 1))
+    done
+    [[ "$count" -gt 0 ]] || fail "WQShortcuts.swift declares no Shortcuts actions"
+}
+
 EXPECTED_BUNDLE_ID=$(plist_value CFBundleIdentifier Info.plist)
 EXPECTED_VERSION=$(plist_value CFBundleShortVersionString Info.plist)
 EXPECTED_BUILD=$(plist_value CFBundleVersion Info.plist)
@@ -115,6 +126,7 @@ xcrun appintentsmetadataprocessor --output "$APP" --toolchain-dir "$SWIFT_TOOLCH
     --source-file-list "$OUT/appintents-sources.txt" --swift-const-vals-list "$OUT/appintents-constvalues.txt" \
     --force >"$OUT/appintents.log" 2>&1 || { cat "$OUT/appintents.log" >&2; fail "the Shortcuts metadata could not be written"; }
 [[ -f "$APP/Metadata.appintents/extract.actionsdata" ]] || fail "the app has no Shortcuts metadata (Metadata.appintents)"
+check_shortcut_actions "$APP"
 # App icon with the iOS 18+ dark and tinted variants (issue #47): a catalog
 # built from icons/ and compiled by actool into Assets.car plus the classic
 # PNGs; its CFBundleIcons replace the plain PNG list in Info.plist.
@@ -163,6 +175,7 @@ validate_app() {
     [[ -x "$app_path/WQFiles" ]] || fail "missing executable in $app_path"
     [[ -f "$app_path/Info.plist" ]] || fail "missing Info.plist in $app_path"
     [[ -f "$app_path/Metadata.appintents/extract.actionsdata" ]] || fail "missing Shortcuts metadata in $app_path"
+    check_shortcut_actions "$app_path"
     [[ "$(plist_value CFBundleIdentifier "$app_path/Info.plist")" == "$EXPECTED_BUNDLE_ID" ]] || \
         fail "bundle identifier does not match source metadata"
     [[ "$(plist_value CFBundleShortVersionString "$app_path/Info.plist")" == "$EXPECTED_VERSION" ]] || \

@@ -570,6 +570,10 @@ static NSString *wq_shortcut_app_container(NSString *bundleID, BOOL extensions, 
         if (error) *error = WQLocalized(@"The app identifier is not a valid bundle identifier");
         return nil;
     }
+    if ([bundleID isEqualToString:NSBundle.mainBundle.bundleIdentifier]) {
+        if (error) *error = WQLocalized(@"WQ Files' own data can't be cleaned or backed up with this action.");
+        return nil;
+    }
     if (!wq_display_names_loaded()) wq_load_display_names();
     NSString *home = [NSHomeDirectory() stringByResolvingSymlinksInPath];
     NSString *found = nil, *stale = nil;
@@ -598,19 +602,11 @@ static NSString *wq_shortcut_app_container(NSString *bundleID, BOOL extensions, 
     return wq_validate_container(found, bundleID, st.st_dev, st.st_ino, error) ? found : nil;
 }
 
-static WQShortcutResult *wq_shortcut_on_io(NSString *what, WQShortcutResult *(^work)(void))
-{
-    __block WQShortcutResult *result = nil;
-    dispatch_sync(wq_io(), ^{ @autoreleasepool { result = work(); } });
-    wq_log(@"shortcut: %@: %@", what, result.ok ? @"OK" : (result.message ?: @"failed"));
-    return result;
-}
-
 WQShortcutResult *wq_shortcut_clean_caches(NSString *bundleID)
 {
     WQShortcutResult *refusal = wq_shortcut_refusal(YES);
     if (refusal) return refusal;
-    return wq_shortcut_on_io([@"clean caches of " stringByAppendingString:bundleID ?: @"?"], ^WQShortcutResult *{
+    return wq_shortcut_perform([@"clean caches of " stringByAppendingString:bundleID ?: @"?"], WQShortcutGateDelete, ^WQShortcutResult *{
         dev_t device = 0;
         ino_t inode = 0;
         NSString *error = nil;
@@ -624,11 +620,14 @@ WQShortcutResult *wq_shortcut_clean_caches(NSString *bundleID)
             if (!wq_validate_container(container, bundleID, device, inode, &error)) return wq_shortcut_failure(error);
             if (!wq_purge_contents([container stringByAppendingPathComponent:relative], &freed)) allRemoved = NO;
         }
+        if (!allRemoved) wq_log(@"shortcut: some cache items of %@ could not be removed", bundleID);
+        // Nothing freed and something refused: not a success. A partly
+        // cleaned cache is one (files an app holds open stay, as in the app).
+        if (!allRemoved && !freed) return wq_shortcut_failure(WQLocalized(@"Some items could not be removed (see Log)"));
         WQShortcutResult *result = [WQShortcutResult new];
         result.ok = YES;
         result.path = container;
         result.bytes = freed;
-        if (!allRemoved) wq_log(@"shortcut: some cache items of %@ could not be removed", bundleID);
         return result;
     });
 }
@@ -637,7 +636,7 @@ WQShortcutResult *wq_shortcut_backup_app(NSString *bundleID)
 {
     WQShortcutResult *refusal = wq_shortcut_refusal(NO);
     if (refusal) return refusal;
-    return wq_shortcut_on_io([@"back up " stringByAppendingString:bundleID ?: @"?"], ^WQShortcutResult *{
+    return wq_shortcut_perform([@"back up " stringByAppendingString:bundleID ?: @"?"], WQShortcutGateChange, ^WQShortcutResult *{
         dev_t device = 0;
         ino_t inode = 0;
         NSString *error = nil;
@@ -1991,7 +1990,15 @@ NSString *wq_recover_interrupted_restore(void)
     struct stat containerStat, safetyStat;
     BOOL containerGone = NO, safetyMissing = NO;
     if (fieldsValid) {
-        if (lstat(container.fileSystemRepresentation, &containerStat) != 0) containerGone = errno == ENOENT;
+        int rc = lstat(container.fileSystemRepresentation, &containerStat);
+        // Without a token a folder that exists can be reported as missing
+        // (see wq_make_backup_from): ask for access, then look again, before
+        // "gone" closes the journal for good.
+        if (rc != 0 && errno == ENOENT) {
+            if (!wq_grant(container)) wq_grant(container.stringByDeletingLastPathComponent);
+            rc = lstat(container.fileSystemRepresentation, &containerStat);
+        }
+        if (rc != 0) containerGone = errno == ENOENT;
         else containerGone = S_ISDIR(containerStat.st_mode) && (containerStat.st_dev != device || containerStat.st_ino != inode);
         safetyMissing = lstat(safety.fileSystemRepresentation, &safetyStat) != 0 && errno == ENOENT;
     }

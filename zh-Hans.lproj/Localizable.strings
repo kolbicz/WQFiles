@@ -1149,10 +1149,13 @@
 "An interrupted restore of %@ was closed because the app was removed or reinstalled since. The data from before the restore is kept as backup %@." = "%@ 的一次中断的恢复已关闭，因为该应用此后已被移除或重新安装。恢复前的数据保留为备份 %@。";
 "An interrupted restore of %@ could not be undone because its safety backup %@ no longer exists. The recovery was closed; check the app's data and restore a backup if needed." = "%@ 的一次中断的恢复无法撤销，因为其安全备份 %@ 已不存在。恢复流程已关闭；请检查该应用的数据，必要时恢复一个备份。";
 "\n\nSymbolic links in the ZIP that were left out: %lu." = "\n\nZIP 中被略过的符号链接：%lu。";
-"\n\nThis data holds no %@ folder. Restoring it leaves the app's %@ as it is." = "\n\n此数据不含 %@ 文件夹。恢复它时，应用的 %@ 保持不变。";
+"\n\nThis data holds no %@ folder. Restoring it leaves the app's %@ as it is." = "\n\n此数据不含 %@ 文件夹。恢复它时，App 的 %@ 保持不变。";
 "The connection is not encrypted: others on the same network can read the password and the files. Share only on a network you trust." = "连接未加密：同一网络中的其他人可以读取密码和文件。请只在你信任的网络中共享。";
 "Allow Shortcuts to Change Files" = "允许快捷指令更改文件";
 "Shortcuts may not change files. Turn on Allow Shortcuts to Change Files in the settings of WQ Files." = "快捷指令不能更改文件。请在 WQ Files 的设置中打开“允许快捷指令更改文件”。";
-"Allow Shortcuts to Change Files: WQ Files adds actions to the Shortcuts app. Listing a folder and getting a file always work. When on, shortcuts and automations can also copy, move, rename, save and delete files, clean an app's caches and back up an app, without asking each time. Deleting and cleaning also need Allow Deleting." = "允许快捷指令更改文件：WQ Files 会向“快捷指令”App 添加操作。列出文件夹和获取文件始终可用。打开后，快捷指令和自动化还可以拷贝、移动、重命名、存储和删除文件，清理某个应用的缓存以及备份某个应用，且不会每次询问。删除和清理还需要打开“允许删除”。";
+"Allow Shortcuts to Change Files: WQ Files adds actions to the Shortcuts app. Listing a folder and getting a file always work. When on, shortcuts and automations can also copy, move, rename, save and delete files, clean an app's caches and back up an app, without asking each time. Deleting and cleaning also need Allow Deleting." = "允许快捷指令更改文件：WQ Files 会向“快捷指令”App 添加操作。列出文件夹和获取文件始终可用。打开后，快捷指令和自动化还可以复制、移动、重命名、保存和删除文件，清理某个 App 的缓存以及备份某个 App，且不会每次询问。删除和清理还需要打开“允许删除”。";
 "Choose a ZIP or Apps Manager .adbk file, or a folder that holds Documents or Library." = "选择 ZIP 或 Apps Manager 的 .adbk 文件，或包含 Documents 或 Library 的文件夹。";
-"No app with this identifier was found. Use Copy Bundle ID in Apps or Cache Cleaner to get it." = "未找到使用此标识符的 App。请在 App 或 缓存清理 中使用“复制 Bundle ID”获取。";
+"No app with this identifier was found. Use Copy Bundle ID in Apps or Cache Cleaner to get it." = "未找到使用此标识符的 App。请在“App”或“缓存清理”中使用“复制 Bundle ID”获取。";
+"This folder can't be moved or renamed: it holds an app's or the system's data." = "无法移动或重命名此文件夹：其中包含某个 App 或系统的数据。";
+"WQ Files was busy for too long, so the action was not run. Try again." = "WQ Files 忙碌时间过长，因此未运行该操作。请重试。";
+"WQ Files' own data can't be cleaned or backed up with this action." = "无法用此操作清理或备份 WQ Files 自身的数据。";

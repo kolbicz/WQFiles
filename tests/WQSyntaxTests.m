@@ -90,6 +90,12 @@ static void TestTokens(void)
     CHECK(KindAt(css, @"css", @"#fff") == WQSyntaxNumber);
     CHECK(KindAt(css, @"css", @"body") == WQSyntaxTag);
     CHECK(KindAt(css, @"css", @".x") == WQSyntaxTag);
+    // A class or id written onto a name keeps its "." or "#".
+    NSString *compound = @"div.foo, li#main, .a.b { color: red; }";
+    CHECK(KindAt(compound, @"css", @"div") == WQSyntaxTag);
+    CHECK(KindAt(compound, @"css", @".foo") == WQSyntaxTag);
+    CHECK(KindAt(compound, @"css", @"#main") == WQSyntaxTag);
+    CHECK(KindAt(compound, @"css", @".b") == WQSyntaxTag);
     // Long literals and blobs: linear time, and the text after them is still colored.
     NSMutableString *blob = [NSMutableString new];
     while (blob.length < 300000) [blob appendString:@"iVBORw0KGgo/AAAANSUhEUgAA+abcDEF0123456789"];

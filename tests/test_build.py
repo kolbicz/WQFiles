@@ -52,15 +52,22 @@ if [ "$1" = "--sdk" ] && [ "$3" = "swiftc" ]; then
 fi
 if [ "$1" = "appintentsmetadataprocessor" ]; then
     output=
+    sources=
     previous=
     for argument in "$@"; do
         if [ "$previous" = "--output" ]; then output=$argument; fi
+        if [ "$previous" = "--source-file-list" ]; then sources=$argument; fi
         previous=$argument
     done
     test -n "$output"
     if [ "${FAKE_NO_INTENTS:-0}" != 1 ]; then
         mkdir -p "$output/Metadata.appintents"
-        printf '{}\n' > "$output/Metadata.appintents/extract.actionsdata"
+        if [ "${FAKE_EMPTY_INTENTS:-0}" = 1 ]; then
+            printf '{"actions":{}}\n' > "$output/Metadata.appintents/extract.actionsdata"
+        else
+            # One entry per action the Swift source declares, like the real tool.
+            sed -n 's/^struct \([A-Za-z0-9_]*\): AppIntent.*/"\1"/p' "$(cat "$sources")" > "$output/Metadata.appintents/extract.actionsdata"
+        fi
     fi
     exit 0
 fi
@@ -175,7 +182,7 @@ class StagedBuildTests(unittest.TestCase):
             root = Path(directory)
             project = root / "project"
             project.mkdir()
-            for name in ("build.sh", "Info.plist", "entitlements.plist"):
+            for name in ("build.sh", "Info.plist", "entitlements.plist", "WQShortcuts.swift"):
                 shutil.copy2(ROOT / name, project / name)
             (project / "icons").mkdir()
             for name in ("AppIcon1024.png", "AppIcon1024-dark.png", "AppIcon1024-tinted.png"):
@@ -193,7 +200,7 @@ class StagedBuildTests(unittest.TestCase):
     def _project_copy(self, root: Path, runner: str | None, executable: bool = True) -> Path:
         project = root / "project"
         project.mkdir()
-        for name in ("build.sh", "Info.plist", "entitlements.plist"):
+        for name in ("build.sh", "Info.plist", "entitlements.plist", "WQShortcuts.swift"):
             shutil.copy2(ROOT / name, project / name)
         (project / "icons").mkdir()
         for name in ("AppIcon1024.png", "AppIcon1024-dark.png", "AppIcon1024-tinted.png"):
@@ -339,6 +346,32 @@ class StagedBuildTests(unittest.TestCase):
             )
             self.assertNotEqual(result.returncode, 0)
             self.assertEqual(final.read_bytes(), original)
+
+    def _build_with(self, variable):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            final = root / "release" / "WQFiles.ipa"
+            final.parent.mkdir()
+            environment = self._fake_environment(root)
+            environment["WQFILES_FINAL_IPA"] = str(final)
+            environment[variable] = "1"
+            result = subprocess.run(
+                [str(BUILD)], cwd=ROOT, env=environment,
+                text=True, capture_output=True, check=False,
+            )
+            return result, final.exists()
+
+    def test_missing_shortcuts_metadata_fails_the_build(self):
+        result, published = self._build_with("FAKE_NO_INTENTS")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("Shortcuts metadata", result.stderr + result.stdout)
+        self.assertFalse(published)
+
+    def test_shortcuts_metadata_without_the_actions_fails_the_build(self):
+        result, published = self._build_with("FAKE_EMPTY_INTENTS")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("does not list", result.stderr + result.stdout)
+        self.assertFalse(published)
 
 
 if __name__ == "__main__":

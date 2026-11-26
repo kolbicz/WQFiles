@@ -35,7 +35,8 @@ WQShortcutResult *wq_shortcut_list(NSString *folder);
 // Copies a file to a temporary place of WQ Files' own and gives that path.
 WQShortcutResult *wq_shortcut_export(NSString *path);
 
-// Changing: need the setting. A name that is taken gives "Name 2", as in the app.
+// Changing: need the setting. Copy and Save give "Name 2" for a name that
+// is taken; Move, Rename and New Folder refuse it.
 WQShortcutResult *wq_shortcut_copy(NSString *path, NSString *toFolder);
 WQShortcutResult *wq_shortcut_move(NSString *path, NSString *toFolder);
 WQShortcutResult *wq_shortcut_rename(NSString *path, NSString *newName);
@@ -51,6 +52,13 @@ WQShortcutResult *wq_shortcut_delete(NSString *path);
 WQShortcutResult *wq_shortcut_clean_caches(NSString *bundleID);
 // Backs up Documents and Library like Apps → Back Up. Needs the setting.
 WQShortcutResult *wq_shortcut_backup_app(NSString *bundleID);
+
+// What an action needs: nothing, the Shortcuts setting, or that and Allow Deleting.
+typedef NS_ENUM(NSInteger, WQShortcutGate) { WQShortcutGateRead = 0, WQShortcutGateChange, WQShortcutGateDelete };
+// Runs `work` on the app's I/O queue and logs the outcome. A changing action
+// is refused there when the settings no longer allow it, or when it waited so
+// long behind the app's own work that Shortcuts has given up on it.
+WQShortcutResult *wq_shortcut_perform(NSString *what, WQShortcutGate gate, WQShortcutResult *_Nonnull (^work)(void));
 
 // For WQApps.m: the refusal when the setting (and, with `deleting`, Allow
 // Deleting) is off; nil when the action may run.

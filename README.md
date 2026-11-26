@@ -80,7 +80,7 @@ new files.
 - **Apps**: every app with its data size. Back up an app's **Documents and
   Library**, restore the latest backup (also from **App Backups**: long-press the app → Restore Backup), clear its data (Documents, Library,
   and tmp), open its folder, or share a backup as a ZIP over AirDrop, Files,
-  Mail and so on. **Import as Backup…** (tap an app) turns a folder or ZIP with
+  Mail and so on. **Import as Backup…** (tap an app, then choose **File** or **Folder**) turns a folder or ZIP with
   `Documents`/`Library` (another device's shared backup, another tool's export)
   into a normal verified backup of that app, ready to restore; data that says
   it belongs to a different app asks first. Apps Manager backups (`.adbk`)
@@ -109,7 +109,7 @@ new files.
   backups do not include it and restore leaves the current `tmp` untouched.
 - **Cache Cleaner**: cache and temp size per app, with search, Select All /
   Invert / None / Large Caches (50 MB+) and crash logs. Long-press an app to
-  jump to its Caches, tmp or data folder. **Your own folders and files:**
+  copy its bundle ID or jump to its Caches, tmp or data folder. **Your own folders and files:**
   long-press one inside an app's data (for example Instagram's
   `Library/Application Support/Instagram/VideoUpload`, which keeps uploaded
   videos) → **Add to Cache Cleaner**, choosing **Always Select** (selected
@@ -168,6 +168,8 @@ new files.
 - **Log**: file writes, backups, deletions, restores and errors the app handled, plus the App Group it received.
 - **Allow Deleting** (Settings, on by default): turn it off and nothing
   can be deleted, cleared or cleaned; saving, moving and restoring still work.
+- **Allow Shortcuts to Change Files** (Settings, off by default): see
+  [Shortcuts](#shortcuts). Off, shortcuts can only list folders and get files.
 - **Show Item Counts** (Settings, off by default): folders show how many
   items they hold. Every subfolder is listed for this, which slows down
   folders with many subfolders.
@@ -194,7 +196,9 @@ new files.
   that folder, opened in any browser on the same Wi-Fi (address and QR code on
   screen). Browse, open and download files, download folders as ZIP, and with
   **Allow Uploads** add files by button or drag and drop; nothing is ever
-  overwritten or deleted. Password protected (user `wq`, a new random password
+  overwritten or deleted. The connection is **not encrypted**: others on the
+  same network can read the password and the files, so share only on a
+  network you trust. Password protected (user `wq`, a new random password
   each time, or a fixed one in **Settings → Sharing Password**, kept in the
   keychain). It stops when you close the screen or leave WQ Files. The page
   follows the design and theme.
@@ -214,6 +218,39 @@ region's store and then the US store. This sends the bundle IDs of your apps
 and your region to Apple. Icons are kept as small PNGs (a few KB each) and not
 backed up; sideloaded or removed apps keep the placeholder, and are asked
 for again after a week. Turning the setting off deletes the downloaded icons.
+
+## Shortcuts
+
+WQ Files adds ten actions to the Shortcuts app, for shortcuts and automations.
+They run without opening WQ Files.
+
+| Action | Takes | Gives |
+|---|---|---|
+| List Folder | folder path | the paths of its items |
+| Get File | file path | the file |
+| Save File | a file, folder path, optional name, Replace Existing | the new path |
+| Copy File or Folder | item path, folder path | the new path |
+| Move File or Folder | item path, folder path | the new path |
+| Rename File or Folder | item path, new name | the new path |
+| New Folder | name, folder path | the new path |
+| Delete File or Folder | item path | nothing |
+| Clean App Caches | bundle ID of an app or extension | bytes freed |
+| Back Up App Data | bundle ID of an app | the backup folder |
+
+- **Paths** are full paths, as **Copy Path** in the file browser gives them.
+  **Bundle IDs** come from **Copy Bundle ID** in Apps or the Cache Cleaner.
+- **List Folder** and **Get File** always work. Every other action needs
+  **Settings → Allow Shortcuts to Change Files**, which is off until you turn
+  it on; Delete and Clean App Caches also need **Allow Deleting**. With the
+  switch on, a shortcut or automation changes files without asking each time,
+  so only run shortcuts you trust.
+- The actions follow the app's rules: deleted files go to Recently Deleted, a
+  replaced file is kept in Backups, Copy and Save File give "Name 2" for a
+  name that is taken, and Move, Rename and New Folder refuse it. Container
+  roots and WQ Files' own backup storage can't be deleted, moved or renamed.
+- An action that had to wait more than 20 seconds because WQ Files was busy
+  (a backup or restore) is not run; run the shortcut again.
+- Every action writes a line starting with `shortcut:` to the **Log**.
 
 ## Custom inspectors
 
@@ -330,7 +367,8 @@ verified by a source-stability digest, a destination-shape digest and stored
 part content hashes (rechecked before restore and rollback), and purge
 postconditions are rechecked, but the operations are not filesystem snapshots
 if the target app keeps running. Target data is changed only in response to
-explicit actions; interrupted safety transactions may be recovered on startup.
+explicit actions, or by a shortcut or automation once **Allow Shortcuts to
+Change Files** is on; interrupted safety transactions may be recovered on startup.
 
 File saves retain the original inode and verify descriptor identity and saved
 contents. Locks are advisory: another app that ignores them can still write
@@ -450,6 +488,12 @@ entitlement (`group.cz.kolbi.wqfiles`). The technique needs an App Group, so
 re-sign with a tool that keeps one; the app uses whichever group it actually
 receives and shows it at the top of the **Log**. If it reports "No App Group",
 the signer dropped it.
+
+The Shortcuts actions are App Intents, which exist in Swift only:
+`WQShortcuts.swift` is compiled with `swiftc`, and Xcode's
+`appintentsmetadataprocessor` writes the `Metadata.appintents` folder the
+Shortcuts app reads, so the build needs a full Xcode, not only the Command
+Line Tools. The build fails if an action is missing from that metadata.
 
 The deployment minimum is iOS 26.0. Builds first run the host regression suite,
 then stage and validate the archive, metadata, signature and App Group before

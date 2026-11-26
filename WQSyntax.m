@@ -111,7 +111,9 @@ static NSArray *wq_language_rules(NSString *language, NSRegularExpressionOptions
             @[@(WQSyntaxKey), @"(?<![\\w-])-{0,2}[A-Za-z][\\w-]*+(?=\\s*:(?![:\\w]{0,200}\\s*\\{))"],
             @[@(WQSyntaxNumber), @"#[0-9a-fA-F]{3,8}\\b|-?\\b\\d+(?:\\.\\d+)?(?:px|em|rem|%|vh|vw|s|ms|pt|deg)?"],
             @[@(WQSyntaxKeyword), @"!important\\b"],
-            @[@(WQSyntaxTag), @"(?<!\\w)[.#]?[A-Za-z_][\\w-]*+(?=[^{};]{0,400}\\{)"],
+            // A class or id starts at its "." or "#" wherever that stands
+            // ("div.foo", "li#main"); a bare name only at a word start.
+            @[@(WQSyntaxTag), @"(?:[.#]|(?<![\\w-]))[A-Za-z_][\\w-]*+(?=[^{};]{0,400}\\{)"],
         ];
     }
     if ([language isEqualToString:@"sql"]) {

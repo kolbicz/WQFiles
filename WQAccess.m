@@ -694,6 +694,17 @@ BOOL wq_is_backup_storage_path(NSString *path)
     return NO;
 }
 
+// A folder that holds backup storage (WQ Files' own Documents, its
+// container): renaming or moving it would take Backups and Recently Deleted
+// out of the app's reach and out of their protection.
+static BOOL wq_holds_backup_storage(NSString *path)
+{
+    NSString *prefix = [WQCanonicalVarPath(path) stringByAppendingString:@"/"];
+    for (NSString *root in @[WQCanonicalVarPath(wq_backup_root()) ?: @"", WQCanonicalVarPath(wq_app_backup_root()) ?: @""])
+        if (root.length && [root hasPrefix:prefix]) return YES;
+    return NO;
+}
+
 static int wq_open(NSString *path, int flags, mode_t mode);
 static int wq_open_directory_flags(NSString *path, int flags);
 
@@ -2186,6 +2197,16 @@ BOOL wq_rename_expecting(NSString *path, NSString *newName, NSDictionary<NSStrin
         if (errorText) *errorText = WQLocalized(@"Backup storage cannot be renamed through the file browser.");
         return NO;
     }
+    if (wq_is_protected_folder(path) || wq_holds_backup_storage(path)) {
+        if (errorText) *errorText = WQLocalized(@"This folder can't be moved or renamed: it holds an app's or the system's data.");
+        return NO;
+    }
+    // As for a new file: a -wal or -journal appearing next to a database
+    // another app has open would be read as part of it.
+    if (wq_sqlite_is_companion(newName) && ![newName isEqualToString:path.lastPathComponent]) {
+        NSString *refusal = wq_sqlite_family_refusal([path.stringByDeletingLastPathComponent stringByAppendingPathComponent:newName]);
+        if (refusal) { if (errorText) *errorText = refusal; return NO; }
+    }
     NSString *parentPath = path.stringByDeletingLastPathComponent;
     int parent = wq_open_directory_flags(parentPath, O_SEARCH);
     if (parent < 0) { if (errorText) *errorText = wq_errno(errno); return NO; }
@@ -2226,6 +2247,14 @@ BOOL wq_move_expecting(NSString *path, NSString *destDir, NSDictionary<NSString 
     if (wq_is_backup_storage_path(source) || wq_is_backup_storage_path([target stringByAppendingPathComponent:name])) {
         if (errorText) *errorText = WQLocalized(@"Backup storage cannot be changed through the file browser.");
         return NO;
+    }
+    if (wq_is_protected_folder(source) || wq_holds_backup_storage(source)) {
+        if (errorText) *errorText = WQLocalized(@"This folder can't be moved or renamed: it holds an app's or the system's data.");
+        return NO;
+    }
+    if (wq_sqlite_is_companion(name)) {
+        NSString *refusal = wq_sqlite_family_refusal([target stringByAppendingPathComponent:name]);
+        if (refusal) { if (errorText) *errorText = refusal; return NO; }
     }
     int from = wq_open_directory_flags(sourceParent, O_SEARCH);
     if (from < 0) { if (errorText) *errorText = wq_errno(errno); return NO; }
