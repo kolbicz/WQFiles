@@ -808,6 +808,10 @@ static BOOL wq_ls_auto_layout_compute(const uint8_t *b, size_t n, size_t heap, N
     return YES;
 }
 
+// In the bundle path table, under a key no bundle id can have: bundle id ->
+// the further .app paths its other records name (earlier installs).
+static NSString *const kWQLSOtherBundlePathsKey = @"\nother";
+
 static BOOL wq_parse_ls_store(NSData *data, NSDictionary **displayOut,
                               NSDictionary **bundleNameOut, NSDictionary **containersOut,
                               NSDictionary **bundlePathsOut)
@@ -998,9 +1002,18 @@ static BOOL wq_parse_ls_store(NSData *data, NSDictionary **displayOut,
             NSString *safeBundleName = wq_safe_name(nm);
             if (safeDisplay && !layoutDisplay[bid]) layoutDisplay[bid] = safeDisplay;
             if (safeBundleName && !layoutBundleName[bid]) layoutBundleName[bid] = safeBundleName;
-            if ([appPath isKindOfClass:NSString.class] && !layoutBundlePaths[bid]) {
+            if ([appPath isKindOfClass:NSString.class]) {
                 NSString *clean = wq_ls_clean_path(appPath);
-                layoutBundlePaths[bid] = clean;
+                if (!layoutBundlePaths[bid]) layoutBundlePaths[bid] = clean;
+                else if (clean.length && ![layoutBundlePaths[bid] isEqual:clean]) {
+                    // The database keeps records of earlier installs: the
+                    // other bundles an id names, for wq_bundle_path_for_id.
+                    NSMutableDictionary *others = layoutBundlePaths[kWQLSOtherBundlePathsKey];
+                    if (!others) layoutBundlePaths[kWQLSOtherBundlePathsKey] = others = [NSMutableDictionary new];
+                    NSMutableArray *list = others[bid];
+                    if (!list) others[bid] = list = [NSMutableArray new];
+                    if (list.count < 8 && ![list containsObject:clean]) [list addObject:clean];
+                }
             }
         }
         for (NSString *path in layoutContainers.allKeys)
@@ -1434,6 +1447,10 @@ void wq_display_names_reset_miss(void)
 
 static NSString *const kWQBundleContainerRoot = @"/private/var/containers/Bundle/Application/";
 
+// The bundle containers named by an id's first record; the rest come from its
+// other records and are listed only while they exist.
+static NSSet<NSString *> *gLSBundleContainersFirst;
+
 // App bundle containers (<root>/<UUID>, holding Name.app) -> bundle id, built
 // from the bundle paths; rebuilt when a new database snapshot is published.
 static NSDictionary<NSString *, NSString *> *wq_bundle_containers_locked(void)
@@ -1442,19 +1459,32 @@ static NSDictionary<NSString *, NSString *> *wq_bundle_containers_locked(void)
     wq_load_ls_names_locked();
     if (map && source == gLSBundlePaths) return map;
     NSMutableDictionary *built = [NSMutableDictionary new];
+    // Every bundle an id names, the ones of its other records included.
+    NSMutableArray<NSArray *> *pairs = [NSMutableArray new];
+    NSMutableSet<NSString *> *firstRecord = [NSMutableSet new];
+    NSDictionary *others = gLSBundlePaths[kWQLSOtherBundlePathsKey];
     [gLSBundlePaths enumerateKeysAndObjectsUsingBlock:^(NSString *bid, NSString *path, BOOL *__unused stop) {
-        if (![bid isKindOfClass:NSString.class] || ![path isKindOfClass:NSString.class]) return;
+        if ([bid isKindOfClass:NSString.class] && [path isKindOfClass:NSString.class]) [pairs addObject:@[bid, path, @YES]];
+    }];
+    if ([others isKindOfClass:NSDictionary.class])
+        [others enumerateKeysAndObjectsUsingBlock:^(NSString *bid, NSArray *list, BOOL *__unused stop) {
+            for (NSString *path in list) [pairs addObject:@[bid, path]];
+        }];
+    for (NSArray *pair in pairs) {
+        NSString *bid = pair[0], *path = pair[1];
         NSString *app = path.stringByStandardizingPath;
         if ([app hasPrefix:@"/var/"]) app = [@"/private" stringByAppendingString:app];
-        if (![app hasPrefix:kWQBundleContainerRoot] || ![app.pathExtension isEqualToString:@"app"]) return;
+        if (![app hasPrefix:kWQBundleContainerRoot] || ![app.pathExtension isEqualToString:@"app"]) continue;
         NSString *container = app.stringByDeletingLastPathComponent;
         // Only <root>/<UUID>/Name.app: extensions and nested apps stay out.
         if (![container.stringByDeletingLastPathComponent isEqualToString:
-              [kWQBundleContainerRoot substringToIndex:kWQBundleContainerRoot.length - 1]]) return;
+              [kWQBundleContainerRoot substringToIndex:kWQBundleContainerRoot.length - 1]]) continue;
         if (!built[container] || bid.length < [built[container] length]) built[container] = bid;
-    }];
+        if (pair.count > 2) [firstRecord addObject:container];
+    }
     source = gLSBundlePaths;
     map = [built copy];
+    gLSBundleContainersFirst = [firstRecord copy];
     return map;
 }
 
@@ -1485,7 +1515,13 @@ NSString *wq_group_id_for_container(NSString *path)
 NSArray<NSString *> *wq_ls_bundle_containers(void)
 {
     @synchronized (wq_ls_lock()) {
-        return [wq_bundle_containers_locked().allKeys sortedArrayUsingSelector:@selector(compare:)];
+        NSMutableArray<NSString *> *list = [NSMutableArray new];
+        for (NSString *container in wq_bundle_containers_locked()) {
+            struct stat st;
+            if ([gLSBundleContainersFirst containsObject:container] || lstat(container.fileSystemRepresentation, &st) == 0)
+                [list addObject:container];
+        }
+        return [list sortedArrayUsingSelector:@selector(compare:)];
     }
 }
 
@@ -1559,6 +1595,16 @@ NSString *wq_bundle_path_for_id(NSString *bundleID)
     @synchronized (wq_ls_lock()) {
         wq_load_ls_names_locked();
         NSString *path = gLSBundlePaths[bundleID];
-        return [path isKindOfClass:NSString.class] ? path : nil;
+        if (![path isKindOfClass:NSString.class]) return nil;
+        // The first record may be an earlier install's: the bundle that is
+        // still there is the app's (checking that it exists works even
+        // where reading a bundle is refused).
+        NSDictionary *others = gLSBundlePaths[kWQLSOtherBundlePathsKey];
+        NSArray *list = [others isKindOfClass:NSDictionary.class] ? others[bundleID] : nil;
+        struct stat st;
+        if (list.count && lstat(path.fileSystemRepresentation, &st) != 0 && errno == ENOENT)
+            for (NSString *other in list)
+                if (lstat(other.fileSystemRepresentation, &st) == 0) return other;
+        return path;
     }
 }
