@@ -752,6 +752,17 @@ void wq_alert(UIViewController *host, NSString *title, NSString *message)
     if (host.presentedViewController && !host.presentedViewController.isBeingDismissed) return;
     UIAlertController *alert = wq_alert_controller(title, message, UIAlertControllerStyleAlert);
     [alert addAction:wq_alert_action(@"OK", UIAlertActionStyleDefault, nil)];
+    // A result may arrive while the picker sheet is still animating out (an
+    // import that fails within the dismissal, issue #72); presenting now is
+    // refused and the message would be lost. Retry once the dismissal ends.
+    UIViewController *presented = host.presentedViewController;
+    if (presented && presented.isBeingDismissed) {
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.6 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+            if (host.isViewLoaded && host.view.window && !host.presentedViewController)
+                [host presentViewController:alert animated:YES completion:nil];
+        });
+        return;
+    }
     [host presentViewController:alert animated:YES completion:nil];
 }
 

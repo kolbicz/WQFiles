@@ -15,6 +15,21 @@
 static const size_t kWQZipChunk = 256 * 1024;
 static const uint32_t kWQZipMax32 = 0xFFFFFFFFu;
 
+// Extracting a real container (an import as backup, issue #72) hits iOS'
+// sandbox guard: creating a file named .com.apple.mobile_container_manager.
+// metadata.plist is refused (Operation not permitted), so the whole extract
+// fails. The name is skipped; WQAppsSupportImportDeclaredBundles reads the
+// declaration from .wqbackup.plist instead when the metadata file is absent.
+static NSSet<NSString *> *wq_zip_unwritable_names(void)
+{
+    static NSSet<NSString *> *names;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+        names = [NSSet setWithObject:@".com.apple.mobile_container_manager.metadata.plist"];
+    });
+    return names;
+}
+
 @implementation WQArchiveIO
 @end
 
@@ -599,6 +614,11 @@ BOOL wq_zip_extract(NSString *zipPath, NSString *outDir, WQArchiveIO *io, unsign
         WQZipItem *it = &items[i];
         NSString *rel = safeNames[i];
         if ([rel isEqualToString:@"__MACOSX"] || [rel hasPrefix:@"__MACOSX/"]) continue;
+        // iOS refuses to create container metadata files (issue #72); skip
+        // them instead of failing the whole extraction. Every other entry
+        // extracts as before.
+        NSString *lastName = rel.lastPathComponent;
+        if ([wq_zip_unwritable_names() containsObject:lastName]) { skipped++; continue; }
         BOOL unixMade = (it->madeBy >> 8) == 3;
         mode_t mode = unixMade ? (mode_t)(it->external >> 16) : 0;
         if (unixMade && S_ISLNK(mode)) { skipped++; continue; }
